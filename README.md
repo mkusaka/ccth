@@ -163,6 +163,61 @@ pnpm run lint
 pnpm run format
 ```
 
+## Setting up Claude Code
+
+### Quick Start
+
+1. Install ccth globally:
+```bash
+npm install -g ccth
+```
+
+2. Set environment variables:
+```bash
+export SLACK_BOT_TOKEN="xoxb-your-slack-bot-token"
+export SLACK_CHANNEL="C1234567890"  # Your Slack channel ID
+```
+
+3. Add to Claude Code settings (`~/.claude/settings.json`):
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ccth"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ccth"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ccth"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+See [examples/](examples/) directory for more configuration examples.
+
 ## Hook Events Supported
 
 ### Core Events (Recommended)

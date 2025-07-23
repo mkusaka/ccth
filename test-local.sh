@@ -25,4 +25,8 @@ echo "5. Testing Notification event (dry-run):"
 cat test-events/notification.json | ccth --dry-run -c test-channel
 echo ""
 
+echo "6. Testing Stop event with transcript (dry-run):"
+cat test-events/stop-with-transcript.json | ccth --dry-run -c test-channel
+echo ""
+
 echo "=== All tests completed ==="
