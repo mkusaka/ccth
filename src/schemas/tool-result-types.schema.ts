@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // ============================================
 // Common Types (STRICT)
@@ -8,8 +8,8 @@ import { z } from 'zod';
 export const TodoItemSchema = z
   .object({
     content: z.string(),
-    status: z.enum(['pending', 'in_progress', 'completed']),
-    priority: z.enum(['high', 'medium', 'low']),
+    status: z.enum(["pending", "in_progress", "completed"]),
+    priority: z.enum(["high", "medium", "low"]),
     id: z.string(),
   })
   .strict();
@@ -55,7 +55,7 @@ const TaskUsageSchema = z
     cache_creation_input_tokens: z.number(),
     cache_read_input_tokens: z.number(),
     output_tokens: z.number(),
-    service_tier: z.literal('standard').optional(),
+    service_tier: z.literal("standard").optional(),
     server_tool_use: z
       .object({
         web_search_requests: z.number(),
@@ -82,7 +82,7 @@ const BashResultSchema = z
 // 2. File Read Result (23.26%)
 const FileReadResultSchema = z
   .object({
-    type: z.literal('text'),
+    type: z.literal("text"),
     file: FileInfoSchema,
   })
   .strict();
@@ -111,7 +111,7 @@ const TodoUpdateResultSchema = z
 // 5. Create File Result (5.21%)
 const CreateFileResultSchema = z
   .object({
-    type: z.literal('create'),
+    type: z.literal("create"),
     filePath: z.string(),
     content: z.string(),
     structuredPatch: z.array(StructuredPatchItemSchema),
@@ -142,7 +142,7 @@ const GlobResultSchema = z
 // 8. Grep Result (3.26%)
 const GrepResultSchema = z
   .object({
-    mode: z.enum(['content', 'files_with_matches', 'count']),
+    mode: z.enum(["content", "files_with_matches", "count"]),
     filenames: z.array(z.string()),
     numFiles: z.number(),
     content: z.string().optional(),
@@ -157,7 +157,7 @@ const TaskResultSchema = z
     content: z.array(
       z
         .object({
-          type: z.literal('text'),
+          type: z.literal("text"),
           text: z.string(),
         })
         .strict(),
@@ -230,7 +230,7 @@ const SimpleFilenamesResultSchema = z
 // 14. Image type (rare edge case)
 const ImageResultSchema = z
   .object({
-    type: z.literal('image'),
+    type: z.literal("image"),
     // Add other fields if needed based on actual data
   })
   .strict();
@@ -238,7 +238,7 @@ const ImageResultSchema = z
 // 15. Update File Result (found in validation)
 const UpdateFileResultSchema = z
   .object({
-    type: z.literal('update'),
+    type: z.literal("update"),
     filePath: z.string(),
     content: z.string(),
     structuredPatch: z.array(StructuredPatchItemSchema),
@@ -250,10 +250,10 @@ const FileResultSchema = z
   .object({
     file: z
       .object({
-        type: z.literal('image'),
+        type: z.literal("image"),
         source: z
           .object({
-            type: z.literal('base64'),
+            type: z.literal("base64"),
             data: z.string(),
             media_type: z.string(),
           })
@@ -266,7 +266,7 @@ const FileResultSchema = z
 // 17. Image with file info (edge case)
 const ImageWithFileSchema = z
   .object({
-    type: z.literal('image'),
+    type: z.literal("image"),
     file: z
       .object({
         base64: z.string(),

@@ -1,5 +1,8 @@
-import { z } from 'zod';
-import { ToolResultSchema, TodoItemSchema } from './tool-result-types.schema.js';
+import { z } from "zod";
+import {
+  ToolResultSchema,
+  TodoItemSchema,
+} from "./tool-result-types.schema.js";
 
 // ============================================
 // Base Schemas (STRICT)
@@ -9,7 +12,7 @@ export const BaseMessageSchema = z
   .object({
     parentUuid: z.string().nullable(),
     isSidechain: z.boolean(),
-    userType: z.literal('external'),
+    userType: z.literal("external"),
     cwd: z.string(),
     sessionId: z.string(),
     version: z.string(),
@@ -24,14 +27,14 @@ export const BaseMessageSchema = z
 
 const TextContentSchema = z
   .object({
-    type: z.literal('text'),
+    type: z.literal("text"),
     text: z.string(),
   })
   .strict();
 
 const ToolUseContentSchema = z
   .object({
-    type: z.literal('tool_use'),
+    type: z.literal("tool_use"),
     id: z.string(),
     name: z.string(),
     input: z.record(z.string(), z.unknown()), // Tool inputs vary greatly by tool type
@@ -40,7 +43,7 @@ const ToolUseContentSchema = z
 
 const ToolResultContentSchema = z
   .object({
-    type: z.literal('tool_result'),
+    type: z.literal("tool_result"),
     tool_use_id: z.string(),
     content: z
       .union([
@@ -48,7 +51,7 @@ const ToolResultContentSchema = z
         z.array(
           z
             .object({
-              type: z.literal('text'),
+              type: z.literal("text"),
               text: z.string(),
             })
             .strict(),
@@ -56,10 +59,10 @@ const ToolResultContentSchema = z
         z.array(
           z
             .object({
-              type: z.literal('image'),
+              type: z.literal("image"),
               source: z
                 .object({
-                  type: z.literal('base64'),
+                  type: z.literal("base64"),
                   data: z.string(),
                   media_type: z.string(),
                 })
@@ -75,7 +78,7 @@ const ToolResultContentSchema = z
 
 const ThinkingContentSchema = z
   .object({
-    type: z.literal('thinking'),
+    type: z.literal("thinking"),
     thinking: z.string(),
     signature: z.string(),
   })
@@ -83,10 +86,10 @@ const ThinkingContentSchema = z
 
 const ImageContentSchema = z
   .object({
-    type: z.literal('image'),
+    type: z.literal("image"),
     source: z
       .object({
-        type: z.literal('base64'),
+        type: z.literal("base64"),
         media_type: z.string(),
         data: z.string(),
       })
@@ -113,7 +116,7 @@ const UsageSchema = z
     cache_creation_input_tokens: z.number(),
     cache_read_input_tokens: z.number(),
     output_tokens: z.number(),
-    service_tier: z.union([z.literal('standard'), z.null()]).optional(), // Can be missing
+    service_tier: z.union([z.literal("standard"), z.null()]).optional(), // Can be missing
     server_tool_use: z
       .object({
         web_search_requests: z.number(),
@@ -128,7 +131,7 @@ const UsageSchema = z
 // ============================================
 
 export const SummaryMessageSchema = BaseMessageSchema.extend({
-  type: z.literal('summary'),
+  type: z.literal("summary"),
   summary: z.string(),
   leafUuid: z.string(),
 }).strict();
@@ -138,7 +141,7 @@ export const SummaryMessageSchema = BaseMessageSchema.extend({
 // ============================================
 
 export const SystemMessageSchema = BaseMessageSchema.extend({
-  type: z.literal('system'),
+  type: z.literal("system"),
   content: z.string(),
   isMeta: z.boolean(),
   toolUseID: z.string().optional(),
@@ -153,10 +156,10 @@ export const SystemMessageSchema = BaseMessageSchema.extend({
 
 // User message with string content
 export const UserStringMessageSchema = BaseMessageSchema.extend({
-  type: z.literal('user'),
+  type: z.literal("user"),
   message: z
     .object({
-      role: z.literal('user'),
+      role: z.literal("user"),
       content: z.string(),
     })
     .strict(),
@@ -167,10 +170,10 @@ export const UserStringMessageSchema = BaseMessageSchema.extend({
 
 // User message with array content (text, tool_result, image)
 export const UserArrayMessageSchema = BaseMessageSchema.extend({
-  type: z.literal('user'),
+  type: z.literal("user"),
   message: z
     .object({
-      role: z.literal('user'),
+      role: z.literal("user"),
       content: z.array(ContentSchema),
     })
     .strict(),
@@ -183,7 +186,7 @@ export const UserArrayMessageSchema = BaseMessageSchema.extend({
       z.array(
         z
           .object({
-            type: z.literal('text'),
+            type: z.literal("text"),
             text: z.string(),
           })
           .strict(),
@@ -191,10 +194,10 @@ export const UserArrayMessageSchema = BaseMessageSchema.extend({
       z.array(
         z
           .object({
-            type: z.literal('image'),
+            type: z.literal("image"),
             source: z
               .object({
-                type: z.literal('base64'),
+                type: z.literal("base64"),
                 data: z.string(),
                 media_type: z.string(),
               })
@@ -213,18 +216,18 @@ export const UserArrayMessageSchema = BaseMessageSchema.extend({
 // ============================================
 
 export const AssistantMessageSchema = BaseMessageSchema.extend({
-  type: z.literal('assistant'),
+  type: z.literal("assistant"),
   message: z
     .object({
       id: z.string(),
-      type: z.literal('message'),
-      role: z.literal('assistant'),
+      type: z.literal("message"),
+      role: z.literal("assistant"),
       model: z.string(),
       content: z.array(ContentSchema),
       stop_reason: z.union([
-        z.literal('end_turn'),
-        z.literal('tool_use'),
-        z.literal('stop_sequence'),
+        z.literal("end_turn"),
+        z.literal("tool_use"),
+        z.literal("stop_sequence"),
         z.null(),
       ]),
       stop_sequence: z.union([z.string(), z.null()]),
@@ -249,7 +252,7 @@ export const SessionMessageSchema = z.union([
 ]);
 
 export type SessionMessage = z.infer<typeof SessionMessageSchema>;
-export type SessionMessageType = SessionMessage['type'];
+export type SessionMessageType = SessionMessage["type"];
 
 // ============================================
 // Helper Type Guards
@@ -257,31 +260,33 @@ export type SessionMessageType = SessionMessage['type'];
 
 export const isUserMessage = (
   msg: SessionMessage,
-): msg is z.infer<typeof UserStringMessageSchema> | z.infer<typeof UserArrayMessageSchema> => {
-  return msg.type === 'user';
+): msg is
+  | z.infer<typeof UserStringMessageSchema>
+  | z.infer<typeof UserArrayMessageSchema> => {
+  return msg.type === "user";
 };
 
 export const isAssistantMessage = (
   msg: SessionMessage,
 ): msg is z.infer<typeof AssistantMessageSchema> => {
-  return msg.type === 'assistant';
+  return msg.type === "assistant";
 };
 
 export const isSystemMessage = (
   msg: SessionMessage,
 ): msg is z.infer<typeof SystemMessageSchema> => {
-  return msg.type === 'system';
+  return msg.type === "system";
 };
 
 export const isSummaryMessage = (
   msg: SessionMessage,
 ): msg is z.infer<typeof SummaryMessageSchema> => {
-  return msg.type === 'summary';
+  return msg.type === "summary";
 };
 
 // Content type guards
 export const hasStringContent = (msg: any): boolean => {
-  return typeof msg.message?.content === 'string';
+  return typeof msg.message?.content === "string";
 };
 
 export const hasArrayContent = (msg: any): boolean => {
@@ -290,12 +295,12 @@ export const hasArrayContent = (msg: any): boolean => {
 
 export const hasThinkingContent = (msg: SessionMessage): boolean => {
   if (!isAssistantMessage(msg)) return false;
-  return msg.message.content.some((item) => item.type === 'thinking');
+  return msg.message.content.some((item) => item.type === "thinking");
 };
 
 export const hasToolUseContent = (msg: SessionMessage): boolean => {
   if (!isAssistantMessage(msg)) return false;
-  return msg.message.content.some((item) => item.type === 'tool_use');
+  return msg.message.content.some((item) => item.type === "tool_use");
 };
 
 // ============================================
@@ -306,7 +311,7 @@ export const parseSessionMessage = (data: unknown): SessionMessage | null => {
   try {
     return SessionMessageSchema.parse(data);
   } catch (error) {
-    console.error('Failed to parse session message:', error);
+    console.error("Failed to parse session message:", error);
     return null;
   }
 };

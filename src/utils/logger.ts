@@ -1,7 +1,7 @@
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+type LogLevel = "debug" | "info" | "warn" | "error";
 
 class Logger {
-  private level: LogLevel = 'info';
+  private level: LogLevel = "info";
 
   private readonly levels: Record<LogLevel, number> = {
     debug: 0,
@@ -18,7 +18,11 @@ class Logger {
     return this.levels[level] >= this.levels[this.level];
   }
 
-  private formatMessage(level: LogLevel, message: string, data?: unknown): string {
+  private formatMessage(
+    level: LogLevel,
+    message: string,
+    data?: unknown,
+  ): string {
     const timestamp = new Date().toISOString();
     const prefix = `[${timestamp}] [${level.toUpperCase()}]`;
 
@@ -30,28 +34,30 @@ class Logger {
   }
 
   debug(message: string, data?: unknown): void {
-    if (this.shouldLog('debug')) {
-      console.debug(this.formatMessage('debug', message, data));
+    if (this.shouldLog("debug")) {
+      console.debug(this.formatMessage("debug", message, data));
     }
   }
 
   info(message: string, data?: unknown): void {
-    if (this.shouldLog('info')) {
-      console.info(this.formatMessage('info', message, data));
+    if (this.shouldLog("info")) {
+      console.info(this.formatMessage("info", message, data));
     }
   }
 
   warn(message: string, data?: unknown): void {
-    if (this.shouldLog('warn')) {
-      console.warn(this.formatMessage('warn', message, data));
+    if (this.shouldLog("warn")) {
+      console.warn(this.formatMessage("warn", message, data));
     }
   }
 
   error(message: string, error?: unknown): void {
-    if (this.shouldLog('error')) {
+    if (this.shouldLog("error")) {
       const errorData =
-        error instanceof Error ? { message: error.message, stack: error.stack } : error;
-      console.error(this.formatMessage('error', message, errorData));
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : error;
+      console.error(this.formatMessage("error", message, errorData));
     }
   }
 }

@@ -1,6 +1,6 @@
-import { WebClient } from '@slack/web-api';
-import { SessionMessage } from '../schemas/session-message.schema.js';
-import { logger } from '../utils/logger.js';
+import { WebClient } from "@slack/web-api";
+import { SessionMessage } from "../schemas/session-message.schema.js";
+import { logger } from "../utils/logger.js";
 
 interface ThreadInfo {
   threadTs: string;
@@ -37,24 +37,33 @@ export class ThreadManager {
 
     for (const [sessionId, threadInfo] of this.threads.entries()) {
       if (now - threadInfo.lastActivity > timeout) {
-        logger.debug('Removing expired thread', { sessionId, threadTs: threadInfo.threadTs });
+        logger.debug("Removing expired thread", {
+          sessionId,
+          threadTs: threadInfo.threadTs,
+        });
         this.threads.delete(sessionId);
       }
     }
   }
 
-  async getOrCreateThread(sessionId: string, message: SessionMessage): Promise<string> {
+  async getOrCreateThread(
+    sessionId: string,
+    message: SessionMessage,
+  ): Promise<string> {
     // Check if we have an existing thread for this session
     const existingThread = this.threads.get(sessionId);
     if (existingThread) {
       existingThread.lastActivity = Date.now();
-      logger.debug('Using existing thread', { sessionId, threadTs: existingThread.threadTs });
+      logger.debug("Using existing thread", {
+        sessionId,
+        threadTs: existingThread.threadTs,
+      });
       return existingThread.threadTs;
     }
 
     // Create a new thread
     if (!this.client) {
-      throw new Error('Slack client not initialized');
+      throw new Error("Slack client not initialized");
     }
 
     const initialMessage = this.createInitialThreadMessage(sessionId, message);
@@ -66,7 +75,7 @@ export class ThreadManager {
       });
 
       if (!result.ts) {
-        throw new Error('Failed to create thread - no timestamp returned');
+        throw new Error("Failed to create thread - no timestamp returned");
       }
 
       const threadInfo: ThreadInfo = {
@@ -76,54 +85,57 @@ export class ThreadManager {
       };
 
       this.threads.set(sessionId, threadInfo);
-      logger.info('Created new thread', { sessionId, threadTs: result.ts });
+      logger.info("Created new thread", { sessionId, threadTs: result.ts });
 
       return result.ts;
     } catch (error) {
       throw new Error(
-        `Failed to create thread: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to create thread: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     }
   }
 
-  private createInitialThreadMessage(sessionId: string, message: SessionMessage) {
+  private createInitialThreadMessage(
+    sessionId: string,
+    message: SessionMessage,
+  ) {
     const timestamp = new Date(message.timestamp).toLocaleString();
 
     return {
       text: `New Claude Code session started`,
       blocks: [
         {
-          type: 'header',
+          type: "header",
           text: {
-            type: 'plain_text',
-            text: '🤖 Claude Code Session',
+            type: "plain_text",
+            text: "🤖 Claude Code Session",
             emoji: true,
           },
         },
         {
-          type: 'section',
+          type: "section",
           fields: [
             {
-              type: 'mrkdwn',
+              type: "mrkdwn",
               text: `*Session ID:*\n\`${sessionId}\``,
             },
             {
-              type: 'mrkdwn',
+              type: "mrkdwn",
               text: `*Started:*\n${timestamp}`,
             },
           ],
         },
         {
-          type: 'context',
+          type: "context",
           elements: [
             {
-              type: 'mrkdwn',
+              type: "mrkdwn",
               text: `Working directory: \`${message.cwd}\``,
             },
           ],
         },
         {
-          type: 'divider',
+          type: "divider",
         },
       ],
     };
