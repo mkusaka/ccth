@@ -70,7 +70,6 @@ export SLACK_CHANNEL="C1234567890"  # Your Slack channel ID
     ],
     "PostToolUse": [
       {
-        "matcher": ".*",
         "hooks": [
           {
             "type": "command",
@@ -231,6 +230,8 @@ Each event is formatted with:
 }
 ```
 
+Note: For `PostToolUse`, if you omit the `matcher` field entirely, it will match all tools.
+
 #### Full Session Monitoring
 ```json
 {
@@ -247,7 +248,6 @@ Each event is formatted with:
     ],
     "PostToolUse": [
       {
-        "matcher": ".*",
         "hooks": [
           {
             "type": "command",

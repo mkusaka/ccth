@@ -1,0 +1,7 @@
+{
+  "session_id": "test-session-123",
+  "transcript_path": "/path/to/transcript.jsonl",
+  "cwd": "/Users/masatomokusaka/src/github.com/mkusaka/ccth",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "Help me write a function to calculate factorial"
+}
