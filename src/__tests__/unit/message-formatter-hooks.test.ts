@@ -167,7 +167,7 @@ describe("Hook Event Message Formatter", () => {
 
       const contentBlock = result.blocks[1] as any;
       expect(contentBlock.text.text).toHaveLength(3003); // 3000 + "..."
-      expect(contentBlock.text.text).toEndWith("...");
+      expect(contentBlock.text.text).toMatch(/\.\.\.$/);
     });
 
     it("should handle unknown event types gracefully", async () => {
