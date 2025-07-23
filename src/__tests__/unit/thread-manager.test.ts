@@ -1,11 +1,29 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ThreadManager } from "../../slack/thread-manager.js";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  getOrCreateThread,
+  createThreadManager,
+} from "../../slack/thread-manager.js";
 import { WebClient } from "@slack/web-api";
 import { SessionMessage } from "../../schemas/session-message.schema.js";
 
-describe("ThreadManager", () => {
+// Create stable mock functions
+const mockSaveSession = vi.fn();
+const mockLoadSession = vi.fn();
+const mockCleanupOldSessions = vi.fn();
+
+// Mock the file storage module
+vi.mock("../../utils/file-storage.js", () => ({
+  createFileStorage: vi.fn(() => ({
+    saveSession: mockSaveSession,
+    loadSession: mockLoadSession,
+    deleteSession: vi.fn().mockResolvedValue(undefined),
+    cleanupOldSessions: mockCleanupOldSessions,
+  })),
+}));
+
+describe("Thread Manager (Functional)", () => {
   let mockClient: WebClient;
-  let threadManager: ThreadManager;
+  const testStorageDir = "/test/storage";
 
   const testMessage: SessionMessage = {
     parentUuid: null,
@@ -24,6 +42,13 @@ describe("ThreadManager", () => {
   };
 
   beforeEach(() => {
+    vi.clearAllMocks();
+
+    // Reset mock implementations
+    mockSaveSession.mockResolvedValue(undefined);
+    mockLoadSession.mockResolvedValue(null);
+    mockCleanupOldSessions.mockResolvedValue(undefined);
+
     // Mock WebClient
     mockClient = {
       chat: {
@@ -34,21 +59,15 @@ describe("ThreadManager", () => {
         }),
       },
     } as unknown as WebClient;
-
-    threadManager = new ThreadManager(mockClient, "test-channel", 300); // 5 min timeout for tests
-  });
-
-  afterEach(() => {
-    threadManager.destroy();
-    vi.clearAllMocks();
   });
 
   describe("getOrCreateThread", () => {
     it("should create a new thread for new session", async () => {
-      const threadTs = await threadManager.getOrCreateThread(
-        "new-session",
-        testMessage,
-      );
+      const threadTs = await getOrCreateThread("new-session", testMessage, {
+        client: mockClient,
+        channel: "test-channel",
+        storageDir: testStorageDir,
+      });
 
       expect(threadTs).toBe("1234567890.123456");
       expect(mockClient.chat.postMessage).toHaveBeenCalledOnce();
@@ -66,24 +85,56 @@ describe("ThreadManager", () => {
           }),
         ]),
       });
+
+      // Verify session was saved
+      expect(mockSaveSession).toHaveBeenCalledWith(
+        "new-session",
+        expect.objectContaining({
+          threadTs: "1234567890.123456",
+          sessionId: "new-session",
+          channel: "test-channel",
+        }),
+      );
     });
 
     it("should reuse existing thread for same session", async () => {
-      // Create initial thread
-      const threadTs1 = await threadManager.getOrCreateThread(
-        "session-1",
-        testMessage,
-      );
-      expect(mockClient.chat.postMessage).toHaveBeenCalledOnce();
+      // Mock existing session in storage
+      const existingSession = {
+        threadTs: "existing-thread-123",
+        lastActivity: Date.now() - 60000, // 1 minute ago
+        sessionId: "session-1",
+        channel: "test-channel",
+      };
 
-      // Reuse thread
-      const threadTs2 = await threadManager.getOrCreateThread(
-        "session-1",
-        testMessage,
-      );
+      mockLoadSession.mockResolvedValueOnce(existingSession);
 
-      expect(threadTs1).toBe(threadTs2);
-      expect(mockClient.chat.postMessage).toHaveBeenCalledOnce(); // Still only called once
+      const threadTs = await getOrCreateThread("session-1", testMessage, {
+        client: mockClient,
+        channel: "test-channel",
+        storageDir: testStorageDir,
+      });
+
+      expect(threadTs).toBe("existing-thread-123");
+      expect(mockClient.chat.postMessage).not.toHaveBeenCalled();
+
+      // Verify session was updated with new lastActivity
+      expect(mockSaveSession).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          threadTs: "existing-thread-123",
+          sessionId: "session-1",
+        }),
+      );
+    });
+
+    it("should throw error when client is null", async () => {
+      await expect(
+        getOrCreateThread("session", testMessage, {
+          client: null,
+          channel: "test-channel",
+          storageDir: testStorageDir,
+        }),
+      ).rejects.toThrow("Slack client not initialized");
     });
 
     it("should handle errors when creating thread", async () => {
@@ -92,71 +143,67 @@ describe("ThreadManager", () => {
       );
 
       await expect(
-        threadManager.getOrCreateThread("error-session", testMessage),
+        getOrCreateThread("error-session", testMessage, {
+          client: mockClient,
+          channel: "test-channel",
+          storageDir: testStorageDir,
+        }),
       ).rejects.toThrow("Failed to create thread: API error");
     });
-
-    it("should throw error when client is null", async () => {
-      const nullClientManager = new ThreadManager(null, "test-channel");
-
-      await expect(
-        nullClientManager.getOrCreateThread("session", testMessage),
-      ).rejects.toThrow("Slack client not initialized");
-
-      nullClientManager.destroy();
-    });
   });
 
-  describe("thread cleanup", () => {
-    it("should clean up expired threads", async () => {
-      // Create a thread
-      await threadManager.getOrCreateThread("old-session", testMessage);
+  describe("createThreadManager", () => {
+    it("should create thread manager with cleanup functionality", async () => {
+      const manager = createThreadManager({
+        client: mockClient,
+        channel: "test-channel",
+        timeoutSeconds: 300,
+        storageDir: testStorageDir,
+      });
 
-      // Fast-forward time by 6 minutes
-      vi.useFakeTimers();
-      vi.advanceTimersByTime(6 * 60 * 1000);
+      // Wait for the async cleanup to be called
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-      // Trigger cleanup (normally done by interval)
-      // @ts-expect-error - accessing private method for testing
-      threadManager.cleanupExpiredThreads();
+      // Verify cleanup is called during initialization
+      expect(mockCleanupOldSessions).toHaveBeenCalledWith(
+        300 * 1000, // 5 minutes in ms
+      );
 
-      // Thread should be gone, so new one will be created
-      vi.useRealTimers();
-      await threadManager.getOrCreateThread("old-session", testMessage);
+      // Test getOrCreateThread
+      const threadTs = await manager.getOrCreateThread(
+        "test-session",
+        testMessage,
+      );
+      expect(threadTs).toBe("1234567890.123456");
 
-      expect(mockClient.chat.postMessage).toHaveBeenCalledTimes(2);
+      // Cleanup
+      manager.destroy();
     });
 
-    it("should update last activity when reusing thread", async () => {
-      await threadManager.getOrCreateThread("active-session", testMessage);
-
+    it("should run cleanup periodically", async () => {
       vi.useFakeTimers();
-      vi.advanceTimersByTime(4 * 60 * 1000); // 4 minutes
 
-      // Use thread again
-      await threadManager.getOrCreateThread("active-session", testMessage);
+      const manager = createThreadManager({
+        client: mockClient,
+        channel: "test-channel",
+        timeoutSeconds: 300,
+        storageDir: testStorageDir,
+      });
 
-      // Advance another 2 minutes (total 6 minutes from start, but only 2 from last use)
-      vi.advanceTimersByTime(2 * 60 * 1000);
+      // Wait for initial async operations
+      await vi.runOnlyPendingTimersAsync();
 
-      // @ts-expect-error - accessing private method for testing
-      threadManager.cleanupExpiredThreads();
+      // Clear initial call
+      mockCleanupOldSessions.mockClear();
 
-      // Thread should still exist
+      // Advance time by 5 minutes
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+
+      // Cleanup should have been called
+      expect(mockCleanupOldSessions).toHaveBeenCalledWith(300 * 1000);
+
+      manager.destroy();
       vi.useRealTimers();
-      await threadManager.getOrCreateThread("active-session", testMessage);
-
-      expect(mockClient.chat.postMessage).toHaveBeenCalledOnce(); // Still only the initial call
-    });
-  });
-
-  describe("destroy", () => {
-    it("should clear all threads and stop cleanup interval", () => {
-      const clearIntervalSpy = vi.spyOn(global, "clearInterval");
-
-      threadManager.destroy();
-
-      expect(clearIntervalSpy).toHaveBeenCalled();
     });
   });
 });

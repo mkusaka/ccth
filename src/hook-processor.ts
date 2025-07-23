@@ -1,18 +1,20 @@
 import { parseSessionMessage } from "./schemas/session-message.schema.js";
 import { WebClient } from "@slack/web-api";
-import { ThreadManager } from "./slack/thread-manager.js";
+import { getOrCreateThread } from "./slack/thread-manager.js";
 import { formatMessageForSlack } from "./slack/message-formatter.js";
 import { logger } from "./utils/logger.js";
 
 interface ProcessOptions {
   slackClient: WebClient | null;
-  threadManager: ThreadManager;
   channel: string;
   dryRun: boolean;
+  threadTimeoutSeconds?: number;
+  storageDir?: string;
 }
 
 export async function processHookInput(options: ProcessOptions): Promise<void> {
-  const { slackClient, threadManager, channel, dryRun } = options;
+  const { slackClient, channel, dryRun, threadTimeoutSeconds, storageDir } =
+    options;
 
   return new Promise((resolve, reject) => {
     let inputBuffer = "";
@@ -63,10 +65,12 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
 
         // Send to Slack
         if (slackClient) {
-          const threadTs = await threadManager.getOrCreateThread(
-            message.sessionId,
-            message,
-          );
+          const threadTs = await getOrCreateThread(message.sessionId, message, {
+            client: slackClient,
+            channel,
+            timeoutSeconds: threadTimeoutSeconds,
+            storageDir,
+          });
 
           const result = await slackClient.chat.postMessage({
             channel,

@@ -1,151 +1,168 @@
 import { WebClient } from "@slack/web-api";
 import { SessionMessage } from "../schemas/session-message.schema.js";
 import { logger } from "../utils/logger.js";
+import { SessionData, createFileStorage } from "../utils/file-storage.js";
 
-interface ThreadInfo {
-  threadTs: string;
-  lastActivity: number;
-  sessionId: string;
+interface ThreadManagerConfig {
+  client: WebClient | null;
+  channel: string;
+  timeoutSeconds?: number;
+  storageDir?: string;
 }
 
-export class ThreadManager {
-  private threads: Map<string, ThreadInfo> = new Map();
-  private cleanupInterval: NodeJS.Timeout | null = null;
+interface ThreadManagerState {
+  cleanupInterval: NodeJS.Timeout | null;
+}
 
-  constructor(
-    private client: WebClient | null,
-    private channel: string,
-    private timeoutSeconds: number = 3600, // 1 hour default
-  ) {
-    // Start cleanup interval to remove old threads
-    this.startCleanupInterval();
+// Create initial thread message
+const createInitialThreadMessage = (
+  sessionId: string,
+  message: SessionMessage,
+) => {
+  const timestamp = new Date(message.timestamp).toLocaleString();
+
+  return {
+    text: `New Claude Code session started`,
+    blocks: [
+      {
+        type: "header",
+        text: {
+          type: "plain_text",
+          text: "🤖 Claude Code Session",
+          emoji: true,
+        },
+      },
+      {
+        type: "section",
+        fields: [
+          {
+            type: "mrkdwn",
+            text: `*Session ID:*\n\`${sessionId}\``,
+          },
+          {
+            type: "mrkdwn",
+            text: `*Started:*\n${timestamp}`,
+          },
+        ],
+      },
+      {
+        type: "context",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: `Working directory: \`${message.cwd}\``,
+          },
+        ],
+      },
+      {
+        type: "divider",
+      },
+    ],
+  };
+};
+
+// Get or create thread for a session
+export const getOrCreateThread = async (
+  sessionId: string,
+  message: SessionMessage,
+  config: ThreadManagerConfig,
+): Promise<string> => {
+  const fileStorage = createFileStorage({ storageDir: config.storageDir });
+
+  // Check if we have an existing thread for this session in storage
+  const existingSession = await fileStorage.loadSession(sessionId);
+  if (existingSession) {
+    // Update last activity and save
+    const updatedSession: SessionData = {
+      ...existingSession,
+      lastActivity: Date.now(),
+    };
+    await fileStorage.saveSession(sessionId, updatedSession);
+
+    logger.debug("Using existing thread from storage", {
+      sessionId,
+      threadTs: existingSession.threadTs,
+    });
+    return existingSession.threadTs;
   }
 
-  private startCleanupInterval(): void {
-    // Check every 5 minutes for expired threads
-    this.cleanupInterval = setInterval(
-      () => {
-        this.cleanupExpiredThreads();
-      },
-      5 * 60 * 1000,
+  // Create a new thread
+  if (!config.client) {
+    throw new Error("Slack client not initialized");
+  }
+
+  const initialMessage = createInitialThreadMessage(sessionId, message);
+
+  try {
+    const result = await config.client.chat.postMessage({
+      channel: config.channel,
+      ...initialMessage,
+    });
+
+    if (!result.ts) {
+      throw new Error("Failed to create thread - no timestamp returned");
+    }
+
+    const sessionData: SessionData = {
+      threadTs: result.ts,
+      lastActivity: Date.now(),
+      sessionId,
+      channel: config.channel,
+    };
+
+    await fileStorage.saveSession(sessionId, sessionData);
+    logger.info("Created new thread and saved to storage", {
+      sessionId,
+      threadTs: result.ts,
+    });
+
+    return result.ts;
+  } catch (error) {
+    throw new Error(
+      `Failed to create thread: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
   }
+};
 
-  private cleanupExpiredThreads(): void {
-    const now = Date.now();
-    const timeout = this.timeoutSeconds * 1000;
+// Create thread manager with cleanup functionality
+export const createThreadManager = (config: ThreadManagerConfig) => {
+  const state: ThreadManagerState = {
+    cleanupInterval: null,
+  };
 
-    for (const [sessionId, threadInfo] of this.threads.entries()) {
-      if (now - threadInfo.lastActivity > timeout) {
-        logger.debug("Removing expired thread", {
-          sessionId,
-          threadTs: threadInfo.threadTs,
-        });
-        this.threads.delete(sessionId);
-      }
+  const timeoutMs = (config.timeoutSeconds || 3600) * 1000;
+  const fileStorage = createFileStorage({ storageDir: config.storageDir });
+
+  // Start cleanup interval
+  const startCleanup = () => {
+    // Run initial cleanup
+    fileStorage.cleanupOldSessions(timeoutMs).catch((error) => {
+      logger.error("Failed to run initial cleanup", error);
+    });
+
+    // Schedule periodic cleanup
+    state.cleanupInterval = setInterval(
+      async () => {
+        await fileStorage.cleanupOldSessions(timeoutMs);
+      },
+      5 * 60 * 1000, // Every 5 minutes
+    );
+  };
+
+  // Stop cleanup interval
+  const destroy = () => {
+    if (state.cleanupInterval) {
+      clearInterval(state.cleanupInterval);
+      state.cleanupInterval = null;
     }
-  }
+  };
 
-  async getOrCreateThread(
-    sessionId: string,
-    message: SessionMessage,
-  ): Promise<string> {
-    // Check if we have an existing thread for this session
-    const existingThread = this.threads.get(sessionId);
-    if (existingThread) {
-      existingThread.lastActivity = Date.now();
-      logger.debug("Using existing thread", {
-        sessionId,
-        threadTs: existingThread.threadTs,
-      });
-      return existingThread.threadTs;
-    }
+  // Start cleanup on creation
+  startCleanup();
 
-    // Create a new thread
-    if (!this.client) {
-      throw new Error("Slack client not initialized");
-    }
-
-    const initialMessage = this.createInitialThreadMessage(sessionId, message);
-
-    try {
-      const result = await this.client.chat.postMessage({
-        channel: this.channel,
-        ...initialMessage,
-      });
-
-      if (!result.ts) {
-        throw new Error("Failed to create thread - no timestamp returned");
-      }
-
-      const threadInfo: ThreadInfo = {
-        threadTs: result.ts,
-        lastActivity: Date.now(),
-        sessionId,
-      };
-
-      this.threads.set(sessionId, threadInfo);
-      logger.info("Created new thread", { sessionId, threadTs: result.ts });
-
-      return result.ts;
-    } catch (error) {
-      throw new Error(
-        `Failed to create thread: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
-    }
-  }
-
-  private createInitialThreadMessage(
-    sessionId: string,
-    message: SessionMessage,
-  ) {
-    const timestamp = new Date(message.timestamp).toLocaleString();
-
-    return {
-      text: `New Claude Code session started`,
-      blocks: [
-        {
-          type: "header",
-          text: {
-            type: "plain_text",
-            text: "🤖 Claude Code Session",
-            emoji: true,
-          },
-        },
-        {
-          type: "section",
-          fields: [
-            {
-              type: "mrkdwn",
-              text: `*Session ID:*\n\`${sessionId}\``,
-            },
-            {
-              type: "mrkdwn",
-              text: `*Started:*\n${timestamp}`,
-            },
-          ],
-        },
-        {
-          type: "context",
-          elements: [
-            {
-              type: "mrkdwn",
-              text: `Working directory: \`${message.cwd}\``,
-            },
-          ],
-        },
-        {
-          type: "divider",
-        },
-      ],
-    };
-  }
-
-  destroy(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-    }
-    this.threads.clear();
-  }
-}
+  return {
+    getOrCreateThread: (sessionId: string, message: SessionMessage) =>
+      getOrCreateThread(sessionId, message, config),
+    destroy,
+  };
+};

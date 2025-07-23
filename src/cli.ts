@@ -5,7 +5,7 @@ import packageJson from "../package.json" with { type: "json" };
 const { version } = packageJson;
 import { processHookInput } from "./hook-processor.js";
 import { initializeSlackClient } from "./slack/client.js";
-import { ThreadManager } from "./slack/thread-manager.js";
+import { createThreadManager } from "./slack/thread-manager.js";
 import { logger } from "./utils/logger.js";
 
 // Load environment variables
@@ -53,21 +53,36 @@ program
       const slackClient = options.dryRun
         ? null
         : await initializeSlackClient(options.token);
-      const threadManager = new ThreadManager(
-        slackClient,
-        options.channel,
-        parseInt(options.threadTimeout, 10),
-      );
 
-      // Process hook input from stdin
-      await processHookInput({
-        slackClient,
-        threadManager,
-        channel: options.channel,
-        dryRun: options.dryRun,
-      });
+      const threadTimeoutSeconds = parseInt(options.threadTimeout, 10);
 
-      logger.debug("Hook processing completed successfully");
+      // Create thread manager for cleanup (only needed if not dry-run)
+      let threadManager = null;
+      if (!options.dryRun) {
+        threadManager = createThreadManager({
+          client: slackClient,
+          channel: options.channel,
+          timeoutSeconds: threadTimeoutSeconds,
+        });
+      }
+
+      try {
+        // Process hook input from stdin
+        await processHookInput({
+          slackClient,
+          channel: options.channel,
+          dryRun: options.dryRun,
+          threadTimeoutSeconds,
+        });
+
+        logger.debug("Hook processing completed successfully");
+      } finally {
+        // Clean up thread manager
+        if (threadManager) {
+          threadManager.destroy();
+        }
+      }
+
       process.exit(0);
     } catch (error) {
       logger.error("Fatal error:", error);
