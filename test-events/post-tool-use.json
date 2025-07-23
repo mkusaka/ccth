@@ -1,0 +1,15 @@
+{
+  "session_id": "test-session-123",
+  "transcript_path": "/path/to/transcript.jsonl",
+  "cwd": "/Users/masatomokusaka/src/github.com/mkusaka/ccth",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "/test/factorial.ts",
+    "content": "export function factorial(n: number): number {\n  if (n <= 1) return 1;\n  return n * factorial(n - 1);\n}"
+  },
+  "tool_response": {
+    "success": true,
+    "filePath": "/test/factorial.ts"
+  }
+}

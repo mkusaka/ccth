@@ -1,0 +1,46 @@
+# Source files
+src/
+tsconfig.json
+vitest.config.ts
+
+# Test files
+**/__tests__/
+*.test.ts
+*.spec.ts
+
+# Development files
+.github/
+.vscode/
+.idea/
+
+# Git files
+.git/
+.gitignore
+
+# CI files
+.github/
+
+# Lock files (optional, but usually excluded)
+pnpm-lock.yaml
+
+# Environment files
+.env
+.env.*
+
+# Coverage reports
+coverage/
+.nyc_output/
+
+# Editor files
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Build artifacts not needed
+*.tsbuildinfo
+
+# Development dependencies
+node_modules/
