@@ -4,6 +4,8 @@
 
 A CLI tool that sends Claude Code session messages to Slack threads. Designed to be used as a hook in Claude Code for real-time session monitoring and collaboration.
 
+![Slack Thread Example](./slack-thread-example.png)
+
 ## Features
 
 - 🔄 Real-time session message forwarding to Slack
