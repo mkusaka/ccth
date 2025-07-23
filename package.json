@@ -3,11 +3,17 @@
   "version": "0.0.1",
   "description": "Claude Code session messages to Slack thread notifier",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/cli.js",
   "bin": {
     "ccth": "dist/cli.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
+    "prepublishOnly": "pnpm run check:all && pnpm run build",
     "build": "tsc",
     "dev": "tsx src/cli.ts",
     "test": "vitest",
@@ -34,6 +40,7 @@
     "zod": "^4.0.5"
   },
   "devDependencies": {
+    "@slack/types": "^2.15.0",
     "@types/node": "^24.1.0",
     "@vitest/coverage-v8": "^3.2.4",
     "oxlint": "^1.8.0",

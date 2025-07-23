@@ -4,7 +4,6 @@ import {
   createThreadManager,
 } from "../../slack/thread-manager.js";
 import { WebClient } from "@slack/web-api";
-import { SessionMessage } from "../../schemas/session-message.schema.js";
 
 // Create stable mock functions
 const mockSaveSession = vi.fn();
@@ -25,20 +24,10 @@ describe("Thread Manager (Functional)", () => {
   let mockClient: WebClient;
   const testStorageDir = "/test/storage";
 
-  const testMessage: SessionMessage = {
-    parentUuid: null,
-    isSidechain: false,
-    userType: "external",
-    cwd: "/test/dir",
+  const testMessage = {
     sessionId: "test-session-123",
-    version: "1.0.0",
-    uuid: "test-uuid-456",
+    cwd: "/test/dir",
     timestamp: "2024-01-23T12:00:00Z",
-    type: "user",
-    message: {
-      role: "user",
-      content: "Hello",
-    },
   };
 
   beforeEach(() => {

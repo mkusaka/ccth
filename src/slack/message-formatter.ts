@@ -1,247 +1,345 @@
+import { KnownBlock } from "@slack/types";
 import {
-  SessionMessage,
-  isUserMessage,
-  isAssistantMessage,
-  isSystemMessage,
-  isSummaryMessage,
-  hasStringContent,
-  hasArrayContent,
-} from "../schemas/session-message.schema.js";
-import { logger } from "../utils/logger.js";
+  HookEvent,
+  UserPromptSubmitEvent,
+  PostToolUseEvent,
+  StopEvent,
+  NotificationEvent,
+} from "../schemas/hook-event.schema.js";
 
-interface SlackMessage {
-  text: string;
-  blocks?: Array<Record<string, unknown>>;
-  mrkdwn?: boolean;
-}
+// Legacy imports for potential future use with transcript parsing
+import { SessionMessage } from "../schemas/session-message.schema.js";
 
-export async function formatMessageForSlack(
-  message: SessionMessage,
-): Promise<SlackMessage> {
-  logger.debug("Formatting message for Slack", { type: message.type });
-
-  if (isUserMessage(message)) {
-    return formatUserMessage(message);
-  } else if (isAssistantMessage(message)) {
-    return formatAssistantMessage(message);
-  } else if (isSystemMessage(message)) {
-    return formatSystemMessage(message);
-  } else if (isSummaryMessage(message)) {
-    return formatSummaryMessage(message);
+// Format tool input/output for display
+const formatToolData = (data: unknown, maxLength = 500): string => {
+  try {
+    const str = JSON.stringify(data, null, 2);
+    if (str.length > maxLength) {
+      return str.substring(0, maxLength) + "...";
+    }
+    return str;
+  } catch {
+    return String(data);
   }
+};
 
-  // Fallback for unknown message types
-  return {
-    text: `Unknown message type: ${(message as SessionMessage).type}`,
-  };
-}
+// Format timestamp
+const formatTimestamp = (timestamp?: string): string => {
+  const date = timestamp ? new Date(timestamp) : new Date();
+  return date.toLocaleTimeString();
+};
 
-function formatUserMessage(message: SessionMessage): SlackMessage {
-  const timestamp = new Date(message.timestamp).toLocaleTimeString();
-
-  if (!isUserMessage(message)) {
-    return { text: "Invalid user message format" };
-  }
-
-  const blocks: Array<Record<string, unknown>> = [
+// Format UserPromptSubmit event
+const formatUserPromptSubmit = (
+  event: UserPromptSubmitEvent,
+): { text: string; blocks: KnownBlock[] } => {
+  const time = formatTimestamp();
+  const blocks: KnownBlock[] = [
     {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*User* at ${timestamp}`,
+        text: `👤 *User at ${time}*`,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          event.prompt.length > 3000
+            ? event.prompt.substring(0, 3000) + "..."
+            : event.prompt,
+      },
+    },
+    {
+      type: "divider",
+    },
+  ];
+
+  return {
+    text: `User: ${event.prompt.substring(0, 100)}...`,
+    blocks,
+  };
+};
+
+// Format PostToolUse event
+const formatPostToolUse = (
+  event: PostToolUseEvent,
+): { text: string; blocks: KnownBlock[] } => {
+  const time = formatTimestamp();
+  const blocks: KnownBlock[] = [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `🔧 *Tool Use: ${event.tool_name} at ${time}*`,
       },
     },
   ];
 
-  if (hasStringContent(message)) {
-    const content = message.message.content as string;
+  // Add tool input
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `*Input:*\n\`\`\`${formatToolData(event.tool_input)}\`\`\``,
+    },
+  });
+
+  // Add tool response
+  if (event.tool_response) {
     blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: truncateText(content, 3000),
+        text: `*Response:*\n\`\`\`${formatToolData(event.tool_response)}\`\`\``,
       },
     });
-  } else if (hasArrayContent(message)) {
-    const content = message.message.content as Array<{
-      type: string;
-      text?: string;
-    }>;
-    for (const item of content) {
-      if (item.type === "text" && item.text) {
-        blocks.push({
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: truncateText(item.text, 3000),
-          },
-        });
-      } else if (item.type === "tool_result") {
-        blocks.push({
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `_Tool result returned_`,
-          },
-        });
-      } else if (item.type === "image") {
-        blocks.push({
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `_Image attached_`,
-          },
-        });
-      }
-    }
   }
+
+  blocks.push({
+    type: "divider",
+  });
 
   return {
-    text: "User message",
+    text: `Tool Use: ${event.tool_name}`,
     blocks,
   };
-}
+};
 
-function formatAssistantMessage(message: SessionMessage): SlackMessage {
-  const timestamp = new Date(message.timestamp).toLocaleTimeString();
-
-  if (!isAssistantMessage(message)) {
-    return { text: "Invalid assistant message format" };
-  }
-
-  const blocks: Array<Record<string, unknown>> = [
+// Format Stop event
+const formatStop = (
+  event: StopEvent,
+): { text: string; blocks: KnownBlock[] } => {
+  const time = formatTimestamp();
+  const blocks: KnownBlock[] = [
     {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*Assistant* at ${timestamp} (${message.message.model})`,
+        text: `✅ *Session Completed at ${time}*`,
       },
     },
   ];
 
-  // Process content array
-  for (const content of message.message.content) {
-    if (content.type === "text") {
-      blocks.push({
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: truncateText(content.text, 3000),
-        },
-      });
-    } else if (content.type === "tool_use") {
-      blocks.push({
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `🔧 *Tool:* \`${content.name}\` (${content.id})`,
-        },
-      });
-
-      // Add tool input preview
-      const inputPreview = JSON.stringify(content.input, null, 2);
-      if (inputPreview.length <= 500) {
-        blocks.push({
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `\`\`\`${inputPreview}\`\`\``,
-          },
-        });
-      }
-    } else if (content.type === "thinking") {
-      blocks.push({
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `💭 _Thinking..._`,
-        },
-      });
-    }
-  }
-
-  // Add usage info if available
-  if (message.message.usage) {
-    const usage = message.message.usage;
+  if (event.stop_hook_active) {
     blocks.push({
       type: "context",
       elements: [
         {
           type: "mrkdwn",
-          text: `Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out`,
+          text: "⚠️ Stop hook is active",
         },
       ],
     });
   }
 
+  blocks.push({
+    type: "divider",
+  });
+
   return {
-    text: "Assistant message",
+    text: "Session completed",
     blocks,
   };
-}
+};
 
-function formatSystemMessage(message: SessionMessage): SlackMessage {
-  const timestamp = new Date(message.timestamp).toLocaleTimeString();
+// Format Notification event
+const formatNotification = (
+  event: NotificationEvent,
+): { text: string; blocks: KnownBlock[] } => {
+  const time = formatTimestamp();
 
-  if (!isSystemMessage(message)) {
-    return { text: "Invalid system message format" };
-  }
+  // Determine notification type
+  const isPermissionRequest = event.message.includes("permission");
+  const isIdle = event.message.includes("waiting");
 
-  const emoji = message.level === "error" ? "❌" : "ℹ️";
+  const icon = isPermissionRequest ? "🔐" : isIdle ? "⏳" : "ℹ️";
+  const header = isPermissionRequest
+    ? "Permission Request"
+    : isIdle
+      ? "Idle Notification"
+      : "Notification";
+
+  const blocks: KnownBlock[] = [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `${icon} *${header} at ${time}*`,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: event.message,
+      },
+    },
+    {
+      type: "divider",
+    },
+  ];
 
   return {
-    text: "System message",
-    blocks: [
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `${emoji} *System* at ${timestamp}`,
-        },
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: truncateText(message.content, 3000),
-        },
-      },
-    ],
+    text: event.message,
+    blocks,
   };
+};
+
+// Main formatter for hook events
+export async function formatHookEventForSlack(
+  event: HookEvent,
+): Promise<{ text: string; blocks: KnownBlock[] }> {
+  switch (event.hook_event_name) {
+    case "UserPromptSubmit":
+      return formatUserPromptSubmit(event);
+    case "PostToolUse":
+      return formatPostToolUse(event);
+    case "Stop":
+      return formatStop(event);
+    case "Notification":
+      return formatNotification(event);
+    default:
+      // For other event types, create a generic format
+      return {
+        text: `${event.hook_event_name} event`,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*${event.hook_event_name}* at ${formatTimestamp()}`,
+            },
+          },
+          {
+            type: "divider",
+          },
+        ],
+      };
+  }
 }
 
-function formatSummaryMessage(message: SessionMessage): SlackMessage {
-  const timestamp = new Date(message.timestamp).toLocaleTimeString();
+// Legacy function for SessionMessage (kept for potential future use)
+export async function formatMessageForSlack(
+  message: SessionMessage,
+): Promise<{ text: string; blocks: KnownBlock[] }> {
+  const blocks: KnownBlock[] = [];
+  const time = formatTimestamp(message.timestamp);
 
-  if (!isSummaryMessage(message)) {
-    return { text: "Invalid summary message format" };
+  switch (message.type) {
+    case "user": {
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `👤 *User at ${time}*`,
+        },
+      });
+
+      const content = message.message.content;
+      if (typeof content === "string") {
+        blocks.push({
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text:
+              content.length > 3000
+                ? content.substring(0, 3000) + "..."
+                : content,
+          },
+        });
+      }
+      break;
+    }
+
+    case "assistant": {
+      const model = (message as any).metadata?.model || "unknown";
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `🤖 *Assistant at ${time} (${model})*`,
+        },
+      });
+
+      const content = message.message.content;
+      if (Array.isArray(content)) {
+        for (const item of content) {
+          if (item.type === "text" && item.text) {
+            blocks.push({
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text:
+                  item.text.length > 3000
+                    ? item.text.substring(0, 3000) + "..."
+                    : item.text,
+              },
+            });
+          }
+        }
+      }
+      break;
+    }
+
+    case "system": {
+      const content = (message as any).content || "";
+      const isError = content.toLowerCase().includes("error");
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `${isError ? "❌" : "ℹ️"} *System at ${time}*`,
+        },
+      });
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: content,
+        },
+      });
+      break;
+    }
+
+    case "summary": {
+      const summary = (message as any).summary || "";
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `📋 *Session Summary at ${time}*`,
+        },
+      });
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: summary,
+        },
+      });
+      break;
+    }
+  }
+
+  blocks.push({
+    type: "divider",
+  });
+
+  // Determine text fallback based on message type
+  let fallbackText = "Message";
+  if (message.type === "user" && message.message.content) {
+    fallbackText = String(message.message.content).substring(0, 100) + "...";
+  } else if (message.type === "system" && (message as any).content) {
+    fallbackText = String((message as any).content).substring(0, 100) + "...";
+  } else if (message.type === "summary" && (message as any).summary) {
+    fallbackText = String((message as any).summary).substring(0, 100) + "...";
   }
 
   return {
-    text: "Session summary",
-    blocks: [
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `📋 *Session Summary* at ${timestamp}`,
-        },
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: truncateText(message.summary, 3000),
-        },
-      },
-    ],
+    text: fallbackText,
+    blocks,
   };
-}
-
-function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
-
-  return text.substring(0, maxLength - 3) + "...";
 }

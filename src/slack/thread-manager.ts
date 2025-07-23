@@ -1,5 +1,4 @@
 import { WebClient } from "@slack/web-api";
-import { SessionMessage } from "../schemas/session-message.schema.js";
 import { logger } from "../utils/logger.js";
 import { SessionData, createFileStorage } from "../utils/file-storage.js";
 
@@ -14,10 +13,16 @@ interface ThreadManagerState {
   cleanupInterval: NodeJS.Timeout | null;
 }
 
+interface ThreadMessage {
+  sessionId: string;
+  cwd: string;
+  timestamp: string;
+}
+
 // Create initial thread message
 const createInitialThreadMessage = (
   sessionId: string,
-  message: SessionMessage,
+  message: ThreadMessage,
 ) => {
   const timestamp = new Date(message.timestamp).toLocaleString();
 
@@ -64,7 +69,7 @@ const createInitialThreadMessage = (
 // Get or create thread for a session
 export const getOrCreateThread = async (
   sessionId: string,
-  message: SessionMessage,
+  message: ThreadMessage,
   config: ThreadManagerConfig,
 ): Promise<string> => {
   const fileStorage = createFileStorage({ storageDir: config.storageDir });
@@ -161,7 +166,7 @@ export const createThreadManager = (config: ThreadManagerConfig) => {
   startCleanup();
 
   return {
-    getOrCreateThread: (sessionId: string, message: SessionMessage) =>
+    getOrCreateThread: (sessionId: string, message: ThreadMessage) =>
       getOrCreateThread(sessionId, message, config),
     destroy,
   };

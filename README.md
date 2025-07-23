@@ -15,6 +15,18 @@ A CLI tool that sends Claude Code session messages to Slack threads. Designed to
 
 ## Installation
 
+### From npm (recommended)
+
+```bash
+npm install -g ccth
+# or
+pnpm add -g ccth
+# or
+yarn global add ccth
+```
+
+### From source
+
 ```bash
 # Clone the repository
 git clone https://github.com/mkusaka/ccth.git
@@ -26,8 +38,8 @@ pnpm install
 # Build the project
 pnpm run build
 
-# Optional: Link globally
-npm link
+# Link globally
+pnpm link --global
 ```
 
 ## Usage
@@ -41,26 +53,41 @@ export SLACK_BOT_TOKEN="xoxb-your-slack-bot-token"
 export SLACK_CHANNEL="C1234567890"  # Your Slack channel ID
 ```
 
-2. Configure Claude Code hook in your settings:
+2. Configure Claude Code hooks in your settings file (`~/.claude/settings.json` or project-specific `.claude/settings.json`):
 
 ```json
 {
   "hooks": {
     "UserPromptSubmit": [
       {
-        "type": "command",
-        "command": "/path/to/ccth/dist/cli.js"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ccth"
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
-        "type": "command",
-        "command": "/path/to/ccth/dist/cli.js"
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ccth"
+          }
+        ]
       }
     ]
   }
 }
 ```
+
+This configuration will:
+- Send user prompts to Slack when submitted (`UserPromptSubmit`)
+- Send tool execution results to Slack after completion (`PostToolUse`)
+
+Note: `UserPromptSubmit` doesn't require a matcher since it's not tool-specific.
 
 ### CLI Options
 
@@ -77,17 +104,33 @@ Options:
   -h, --help                    display help for command
 ```
 
-### Example Usage
+### Example Hook Input
+
+The tool expects Claude Code hook event JSON via stdin:
 
 ```bash
-# Basic usage with environment variables
-echo '{"type": "user", "message": {"role": "user", "content": "Hello"}, ...}' | ccth
+# UserPromptSubmit event
+echo '{
+  "session_id": "abc123",
+  "transcript_path": "/path/to/transcript.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "Help me write a function"
+}' | ccth
 
-# With CLI options
-echo '{"type": "user", ...}' | ccth -c C1234567890 -t xoxb-token
+# PostToolUse event
+echo '{
+  "session_id": "abc123",
+  "transcript_path": "/path/to/transcript.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": {"file_path": "/test.txt", "content": "Hello"},
+  "tool_response": {"success": true}
+}' | ccth
 
 # Dry run mode for testing
-echo '{"type": "user", ...}' | ccth --dry-run --debug
+echo '{...}' | ccth --dry-run --debug
 ```
 
 ## Slack Bot Setup
@@ -121,12 +164,37 @@ pnpm run lint
 pnpm run format
 ```
 
-## Message Types Supported
+## Hook Events Supported
 
-- **User Messages**: User prompts and inputs
-- **Assistant Messages**: Claude's responses with tool usage
-- **System Messages**: System notifications and errors
-- **Summary Messages**: Session summaries
+### Core Events (Recommended)
+
+- **UserPromptSubmit**: Captures user prompts when submitted
+  - Shows user input with timestamp
+  - Essential for tracking conversation flow
+
+- **PostToolUse**: Captures tool execution results
+  - Shows tool name, input parameters, and response
+  - Helps track what actions Claude is performing
+
+### Additional Events
+
+- **Stop**: Triggered when Claude completes its response
+  - Shows session completion status
+  - Useful for tracking when Claude finishes tasks
+  - Includes `stop_hook_active` flag if stop hook is preventing completion
+
+- **Notification**: System notifications from Claude Code
+  - Permission requests (e.g., "Claude needs your permission to use Bash")
+  - Idle notifications (e.g., "Claude is waiting for your input")
+  - Automatically categorized with appropriate icons (🔐 for permissions, ⏳ for idle)
+
+### Message Formatting
+
+Each event is formatted with:
+- Timestamp
+- Event-specific icon
+- Rich formatting using Slack Block Kit
+- Contextual information based on event type
 
 ## Thread Management
 
@@ -144,36 +212,79 @@ pnpm run format
 
 ### Hook Configuration Examples
 
-#### Monitor All Messages
+#### Monitor Only Specific Tools
 ```json
 {
   "hooks": {
-    "UserPromptSubmit": [{
-      "type": "command",
-      "command": "ccth"
-    }],
-    "PostToolUse": [{
-      "type": "command",
-      "command": "ccth"
-    }]
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ccth --debug"
+          }
+        ]
+      }
+    ]
   }
 }
 ```
 
-#### Monitor Only Tool Usage
+#### Full Session Monitoring
 ```json
 {
   "hooks": {
-    "PostToolUse": [{
-      "matcher": ".*",
-      "hooks": [{
-        "type": "command",
-        "command": "ccth --debug"
-      }]
-    }]
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ccth"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ccth"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ccth"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ccth"
+          }
+        ]
+      }
+    ]
   }
 }
 ```
+
+This configuration provides:
+- **User prompts** via `UserPromptSubmit`
+- **Tool executions** via `PostToolUse` 
+- **Completion status** via `Stop`
+- **Permission requests and idle alerts** via `Notification`
 
 ## License
 

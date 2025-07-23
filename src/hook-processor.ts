@@ -1,7 +1,7 @@
-import { parseSessionMessage } from "./schemas/session-message.schema.js";
+import { parseHookEvent } from "./schemas/hook-event.schema.js";
 import { WebClient } from "@slack/web-api";
 import { getOrCreateThread } from "./slack/thread-manager.js";
-import { formatMessageForSlack } from "./slack/message-formatter.js";
+import { formatHookEventForSlack } from "./slack/message-formatter.js";
 import { logger } from "./utils/logger.js";
 
 interface ProcessOptions {
@@ -42,20 +42,19 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
           );
         }
 
-        // Parse as SessionMessage
-        const message = parseSessionMessage(jsonData);
-        if (!message) {
-          throw new Error("Invalid session message format");
+        // Parse as HookEvent
+        const hookEvent = parseHookEvent(jsonData);
+        if (!hookEvent) {
+          throw new Error("Invalid hook event format");
         }
 
-        logger.info("Parsed session message", {
-          type: message.type,
-          sessionId: message.sessionId,
-          uuid: message.uuid,
+        logger.info("Parsed hook event", {
+          type: hookEvent.hook_event_name,
+          sessionId: hookEvent.session_id,
         });
 
         // Format message for Slack
-        const slackMessage = await formatMessageForSlack(message);
+        const slackMessage = await formatHookEventForSlack(hookEvent);
 
         if (dryRun) {
           logger.info("Dry run mode - would send to Slack:", slackMessage);
@@ -65,12 +64,23 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
 
         // Send to Slack
         if (slackClient) {
-          const threadTs = await getOrCreateThread(message.sessionId, message, {
-            client: slackClient,
-            channel,
-            timeoutSeconds: threadTimeoutSeconds,
-            storageDir,
-          });
+          // For thread management, we need a dummy message object with session info
+          const threadMessage = {
+            sessionId: hookEvent.session_id,
+            cwd: hookEvent.cwd,
+            timestamp: new Date().toISOString(),
+          };
+
+          const threadTs = await getOrCreateThread(
+            hookEvent.session_id,
+            threadMessage,
+            {
+              client: slackClient,
+              channel,
+              timeoutSeconds: threadTimeoutSeconds,
+              storageDir,
+            },
+          );
 
           const result = await slackClient.chat.postMessage({
             channel,
