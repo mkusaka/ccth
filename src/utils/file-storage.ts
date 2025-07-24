@@ -120,11 +120,7 @@ export const appendEvent = async (
   };
 
   try {
-    await fs.appendFile(
-      eventsFile,
-      JSON.stringify(eventData) + "\n",
-      "utf-8",
-    );
+    await fs.appendFile(eventsFile, JSON.stringify(eventData) + "\n", "utf-8");
     logger.debug("Appended event to JSONL file", { sessionId, eventsFile });
   } catch (error) {
     throw new Error(
@@ -146,7 +142,7 @@ export const cleanupOldSessions = async (
 
     const cleanupPromises = entries.map(async (entry) => {
       const entryPath = join(storageDir, entry.name);
-      
+
       // Handle old JSON files (legacy format)
       if (entry.isFile() && entry.name.endsWith(".json")) {
         try {
@@ -164,7 +160,7 @@ export const cleanupOldSessions = async (
           logger.error("Failed to process file during cleanup", error);
         }
       }
-      
+
       // Handle new directory format
       if (entry.isDirectory()) {
         try {
@@ -195,7 +191,10 @@ export const cleanupOldSessions = async (
                 });
               }
             } catch (innerError) {
-              logger.error("Failed to process directory during cleanup", innerError);
+              logger.error(
+                "Failed to process directory during cleanup",
+                innerError,
+              );
             }
           } else {
             logger.error("Failed to process directory during cleanup", error);
@@ -231,16 +230,16 @@ export const migrateOldFormat = async (
         try {
           // Read old file
           const data = await fs.readFile(oldPath, "utf-8");
-          
+
           // Create new directory structure
           await ensureStorageDir(sessionDir);
-          
+
           // Write to new location
           await fs.writeFile(newPath, data, "utf-8");
-          
+
           // Delete old file
           await fs.unlink(oldPath);
-          
+
           logger.info("Migrated session to new format", {
             sessionId,
             oldPath,

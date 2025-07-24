@@ -97,7 +97,7 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
                   summary: assistantSummary,
                   timestamp: new Date().toISOString(),
                 });
-                
+
                 // Log the actual formatted message
                 const formattedMessage =
                   formatAssistantResponseForSlack(assistantSummary);
@@ -160,7 +160,7 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
                   summary: assistantSummary,
                   timestamp: new Date().toISOString(),
                 });
-                
+
                 // Format assistant response for Slack
                 const assistantMessage =
                   formatAssistantResponseForSlack(assistantSummary);

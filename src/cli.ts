@@ -54,7 +54,7 @@ program
       const fileStorage = createFileStorage();
       await fileStorage.migrateOldFormat();
       logger.debug("Migration check completed");
-      
+
       // Initialize Slack client
       const slackClient = options.dryRun
         ? null

@@ -71,10 +71,9 @@ describe("File Storage (Functional)", () => {
 
       await saveSession("test-session", sessionData, testConfig);
 
-      expect(mockFs.mkdir).toHaveBeenCalledWith(
-        "/test/storage/test-session",
-        { recursive: true }
-      );
+      expect(mockFs.mkdir).toHaveBeenCalledWith("/test/storage/test-session", {
+        recursive: true,
+      });
       expect(mockFs.writeFile).toHaveBeenCalledWith(
         "/test/storage/test-session/thread.json",
         JSON.stringify(sessionData, null, 2),
@@ -141,10 +140,10 @@ describe("File Storage (Functional)", () => {
 
       await deleteSession("test-session", testConfig);
 
-      expect(mockFs.rm).toHaveBeenCalledWith(
-        "/test/storage/test-session",
-        { recursive: true, force: true }
-      );
+      expect(mockFs.rm).toHaveBeenCalledWith("/test/storage/test-session", {
+        recursive: true,
+        force: true,
+      });
     });
 
     it("should not throw if directory doesn't exist", async () => {
@@ -166,8 +165,16 @@ describe("File Storage (Functional)", () => {
 
       mockFs.mkdir.mockResolvedValueOnce(undefined);
       mockFs.readdir.mockResolvedValueOnce([
-        { name: "old-session.json", isFile: () => true, isDirectory: () => false },
-        { name: "new-session.json", isFile: () => true, isDirectory: () => false },
+        {
+          name: "old-session.json",
+          isFile: () => true,
+          isDirectory: () => false,
+        },
+        {
+          name: "new-session.json",
+          isFile: () => true,
+          isDirectory: () => false,
+        },
         { name: "not-json.txt", isFile: () => true, isDirectory: () => false },
       ]);
       mockFs.stat
@@ -201,10 +208,9 @@ describe("File Storage (Functional)", () => {
       const event = { type: "test", data: "example" };
       await appendEvent("test-session", event, testConfig);
 
-      expect(mockFs.mkdir).toHaveBeenCalledWith(
-        "/test/storage/test-session",
-        { recursive: true }
-      );
+      expect(mockFs.mkdir).toHaveBeenCalledWith("/test/storage/test-session", {
+        recursive: true,
+      });
       expect(mockFs.appendFile).toHaveBeenCalledWith(
         "/test/storage/test-session/events.jsonl",
         expect.stringContaining('"type":"test"'),
@@ -221,27 +227,42 @@ describe("File Storage (Functional)", () => {
         { name: "session2.json", isFile: () => true, isDirectory: () => false },
         { name: "existing-dir", isFile: () => false, isDirectory: () => true },
       ]);
-      
-      const sessionData = { threadTs: "123", lastActivity: Date.now(), channel: "C123", sessionId: "session1" };
+
+      const sessionData = {
+        threadTs: "123",
+        lastActivity: Date.now(),
+        channel: "C123",
+        sessionId: "session1",
+      };
       mockFs.readFile.mockResolvedValue(JSON.stringify(sessionData));
       mockFs.writeFile.mockResolvedValue(undefined);
       mockFs.unlink.mockResolvedValue(undefined);
 
       await migrateOldFormat(testConfig);
 
-      expect(mockFs.readFile).toHaveBeenCalledWith("/test/storage/session1.json", "utf-8");
-      expect(mockFs.readFile).toHaveBeenCalledWith("/test/storage/session2.json", "utf-8");
-      expect(mockFs.mkdir).toHaveBeenCalledWith("/test/storage/session1", { recursive: true });
-      expect(mockFs.mkdir).toHaveBeenCalledWith("/test/storage/session2", { recursive: true });
+      expect(mockFs.readFile).toHaveBeenCalledWith(
+        "/test/storage/session1.json",
+        "utf-8",
+      );
+      expect(mockFs.readFile).toHaveBeenCalledWith(
+        "/test/storage/session2.json",
+        "utf-8",
+      );
+      expect(mockFs.mkdir).toHaveBeenCalledWith("/test/storage/session1", {
+        recursive: true,
+      });
+      expect(mockFs.mkdir).toHaveBeenCalledWith("/test/storage/session2", {
+        recursive: true,
+      });
       expect(mockFs.writeFile).toHaveBeenCalledWith(
         "/test/storage/session1/thread.json",
         expect.any(String),
-        "utf-8"
+        "utf-8",
       );
       expect(mockFs.writeFile).toHaveBeenCalledWith(
         "/test/storage/session2/thread.json",
         expect.any(String),
-        "utf-8"
+        "utf-8",
       );
       expect(mockFs.unlink).toHaveBeenCalledWith("/test/storage/session1.json");
       expect(mockFs.unlink).toHaveBeenCalledWith("/test/storage/session2.json");
