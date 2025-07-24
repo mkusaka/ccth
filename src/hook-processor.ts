@@ -118,7 +118,6 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
                   },
                 );
 
-                // Assistant response is not saved as raw event (only hook events)
 
                 // Log the actual formatted message
                 const formattedMessage =
@@ -176,7 +175,6 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
               const assistantSummary = await reader.getLatestAssistantSummary();
 
               if (assistantSummary && assistantSummary.text) {
-                // Assistant response is not saved as raw event (only hook events)
 
                 // Format assistant response for Slack
                 const assistantMessage =
