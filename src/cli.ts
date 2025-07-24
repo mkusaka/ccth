@@ -79,6 +79,7 @@ program
           channel: options.channel,
           dryRun: options.dryRun,
           threadTimeoutSeconds,
+          debug: options.debug,
         });
 
         logger.debug("Hook processing completed successfully");

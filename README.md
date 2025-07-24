@@ -98,12 +98,25 @@ ccth [options]
 Options:
   -c, --channel <channel>        Slack channel ID or name (env: SLACK_CHANNEL)
   -t, --token <token>           Slack bot token (env: SLACK_BOT_TOKEN)
-  -d, --debug                   Enable debug logging
+  -d, --debug                   Enable debug logging and event storage
   --dry-run                     Process messages without sending to Slack
   --thread-timeout <seconds>    Thread inactivity timeout in seconds (default: 3600)
   -V, --version                 output the version number
   -h, --help                    display help for command
 ```
+
+### Debug Mode and Event Logging
+
+When running with the `-d, --debug` flag, ccth will save raw hook events to disk for debugging purposes:
+
+```
+~/.ccth/
+  └── {session_id}/
+      ├── thread.json    # Session metadata
+      └── events.jsonl   # Raw hook events in chronological order
+```
+
+This is useful for debugging and analyzing Claude Code session activity.
 
 ### Example Hook Input
 
