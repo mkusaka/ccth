@@ -1,6 +1,6 @@
 {
   "name": "ccth",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Claude Code session messages to Slack thread notifier",
   "type": "module",
   "main": "dist/cli.js",
