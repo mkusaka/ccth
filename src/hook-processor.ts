@@ -5,6 +5,7 @@ import { formatHookEventForSlack } from "./slack/message-formatter.js";
 import { logger } from "./utils/logger.js";
 import { createTranscriptReader } from "./utils/transcript-reader.js";
 import { KnownBlock } from "@slack/types";
+import { createFileStorage } from "./utils/file-storage.js";
 
 interface ProcessOptions {
   slackClient: WebClient | null;
@@ -55,6 +56,14 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
           sessionId: hookEvent.session_id,
         });
 
+        // Save event to JSONL file
+        const fileStorage = createFileStorage({ storageDir });
+        await fileStorage.appendEvent(hookEvent.session_id, hookEvent);
+        logger.debug("Saved event to storage", {
+          sessionId: hookEvent.session_id,
+          eventType: hookEvent.hook_event_name,
+        });
+
         // Format message for Slack
         const slackMessage = await formatHookEventForSlack(hookEvent);
 
@@ -81,6 +90,13 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
                     model: assistantSummary.model,
                   },
                 );
+
+                // Save assistant response as event in dry-run mode
+                await fileStorage.appendEvent(hookEvent.session_id, {
+                  type: "assistant_response",
+                  summary: assistantSummary,
+                  timestamp: new Date().toISOString(),
+                });
 
                 // Log the actual formatted message
                 const formattedMessage =
@@ -138,6 +154,13 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
               const assistantSummary = await reader.getLatestAssistantSummary();
 
               if (assistantSummary && assistantSummary.text) {
+                // Save assistant response as event
+                await fileStorage.appendEvent(hookEvent.session_id, {
+                  type: "assistant_response",
+                  summary: assistantSummary,
+                  timestamp: new Date().toISOString(),
+                });
+
                 // Format assistant response for Slack
                 const assistantMessage =
                   formatAssistantResponseForSlack(assistantSummary);

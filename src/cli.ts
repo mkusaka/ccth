@@ -7,6 +7,7 @@ import { processHookInput } from "./hook-processor.js";
 import { initializeSlackClient } from "./slack/client.js";
 import { createThreadManager } from "./slack/thread-manager.js";
 import { logger } from "./utils/logger.js";
+import { createFileStorage } from "./utils/file-storage.js";
 
 // Load environment variables
 config();
@@ -48,6 +49,11 @@ program
       if (options.debug) {
         logger.setLevel("debug");
       }
+
+      // Run migration to new storage format
+      const fileStorage = createFileStorage();
+      await fileStorage.migrateOldFormat();
+      logger.debug("Migration check completed");
 
       // Initialize Slack client
       const slackClient = options.dryRun
