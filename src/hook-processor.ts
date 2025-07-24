@@ -118,7 +118,6 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
                   },
                 );
 
-
                 // Log the actual formatted message
                 const formattedMessage =
                   formatAssistantResponseForSlack(assistantSummary);
@@ -175,7 +174,6 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
               const assistantSummary = await reader.getLatestAssistantSummary();
 
               if (assistantSummary && assistantSummary.text) {
-
                 // Format assistant response for Slack
                 const assistantMessage =
                   formatAssistantResponseForSlack(assistantSummary);
