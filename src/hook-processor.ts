@@ -13,11 +13,18 @@ interface ProcessOptions {
   dryRun: boolean;
   threadTimeoutSeconds?: number;
   storageDir?: string;
+  debug: boolean;
 }
 
 export async function processHookInput(options: ProcessOptions): Promise<void> {
-  const { slackClient, channel, dryRun, threadTimeoutSeconds, storageDir } =
-    options;
+  const {
+    slackClient,
+    channel,
+    dryRun,
+    threadTimeoutSeconds,
+    storageDir,
+    debug,
+  } = options;
 
   return new Promise((resolve, reject) => {
     let inputBuffer = "";
@@ -34,6 +41,34 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
         logger.debug("Received input from stdin", {
           length: inputBuffer.length,
         });
+
+        // Save raw event to JSONL file (only in debug mode)
+        if (debug) {
+          try {
+            // Parse just to get session_id
+            const rawData = JSON.parse(inputBuffer);
+            if (
+              rawData &&
+              typeof rawData === "object" &&
+              "session_id" in rawData
+            ) {
+              const fileStorage = createFileStorage({ storageDir });
+              await fileStorage.appendEvent(
+                rawData.session_id as string,
+                rawData,
+              );
+              logger.debug("Saved raw event to storage", {
+                sessionId: rawData.session_id,
+                eventType: rawData.hook_event_name,
+              });
+            }
+          } catch (error) {
+            logger.warn("Failed to save raw event", {
+              error,
+              inputBuffer,
+            });
+          }
+        }
 
         // Parse JSON input
         let jsonData: unknown;
@@ -54,14 +89,6 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
         logger.info("Parsed hook event", {
           type: hookEvent.hook_event_name,
           sessionId: hookEvent.session_id,
-        });
-
-        // Save event to JSONL file
-        const fileStorage = createFileStorage({ storageDir });
-        await fileStorage.appendEvent(hookEvent.session_id, hookEvent);
-        logger.debug("Saved event to storage", {
-          sessionId: hookEvent.session_id,
-          eventType: hookEvent.hook_event_name,
         });
 
         // Format message for Slack
@@ -90,13 +117,6 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
                     model: assistantSummary.model,
                   },
                 );
-
-                // Save assistant response as event in dry-run mode
-                await fileStorage.appendEvent(hookEvent.session_id, {
-                  type: "assistant_response",
-                  summary: assistantSummary,
-                  timestamp: new Date().toISOString(),
-                });
 
                 // Log the actual formatted message
                 const formattedMessage =
@@ -154,13 +174,6 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
               const assistantSummary = await reader.getLatestAssistantSummary();
 
               if (assistantSummary && assistantSummary.text) {
-                // Save assistant response as event
-                await fileStorage.appendEvent(hookEvent.session_id, {
-                  type: "assistant_response",
-                  summary: assistantSummary,
-                  timestamp: new Date().toISOString(),
-                });
-
                 // Format assistant response for Slack
                 const assistantMessage =
                   formatAssistantResponseForSlack(assistantSummary);
