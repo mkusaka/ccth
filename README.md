@@ -136,12 +136,88 @@ echo '{...}' | ccth --dry-run --debug
 
 ## Slack Bot Setup
 
-1. Create a new Slack App at https://api.slack.com/apps
-2. Add OAuth scopes:
-   - `chat:write`
-   - `chat:write.public` (if posting to public channels)
-3. Install the app to your workspace
-4. Copy the Bot User OAuth Token
+### Step 1: Create a Slack App
+
+1. Go to [Slack API Apps page](https://api.slack.com/apps)
+2. Click **"Create New App"**
+3. Choose **"From scratch"**
+4. Enter:
+   - **App Name**: `CCTH Bot` (or your preferred name)
+   - **Pick a workspace**: Select your Slack workspace
+5. Click **"Create App"**
+
+### Step 2: Configure Bot Token Scopes
+
+1. In your app's dashboard, navigate to **"OAuth & Permissions"** in the left sidebar
+2. Scroll down to **"Scopes"** section
+3. Under **"Bot Token Scopes"**, click **"Add an OAuth Scope"**
+4. Add the following scopes:
+   - `chat:write` - Required for sending messages
+   - `chat:write.public` - Required if posting to public channels
+   - `channels:read` - Optional: To list channels
+   - `groups:read` - Optional: To access private channels
+5. Save your changes
+
+### Step 3: Install App to Workspace
+
+1. Scroll to the top of the **"OAuth & Permissions"** page
+2. Click **"Install to Workspace"**
+3. Review the permissions and click **"Allow"**
+4. You'll be redirected back to the OAuth & Permissions page
+
+### Step 4: Copy Bot Token
+
+1. After installation, you'll see a **"Bot User OAuth Token"** starting with `xoxb-`
+2. Click **"Copy"** to copy the token
+3. Save this token securely - you'll need it for the `SLACK_BOT_TOKEN` environment variable
+
+### Step 5: Find Your Channel ID
+
+#### Method 1: From Slack App
+1. Right-click on the channel name in Slack
+2. Select **"View channel details"**
+3. Scroll to the bottom
+4. The Channel ID starts with `C` (e.g., `C1234567890`)
+
+#### Method 2: From Slack Web
+1. Open Slack in your browser
+2. Navigate to the channel
+3. The URL will contain the channel ID: `https://app.slack.com/client/T[TEAM_ID]/C[CHANNEL_ID]`
+
+### Step 6: Add Bot to Channel
+
+1. In Slack, go to the channel where you want the bot to post
+2. Type `/invite @CCTH Bot` (or your bot's name)
+3. Press Enter to invite the bot
+
+### Step 7: Set Environment Variables
+
+```bash
+# Add to your shell profile (~/.bashrc, ~/.zshrc, etc.)
+export SLACK_BOT_TOKEN="xoxb-your-bot-token-here"
+export SLACK_CHANNEL="C1234567890"  # Your channel ID
+
+# Or create a .env file in your project
+echo 'SLACK_BOT_TOKEN="xoxb-your-bot-token-here"' >> ~/.env
+echo 'SLACK_CHANNEL="C1234567890"' >> ~/.env
+```
+
+### Troubleshooting
+
+#### Bot can't post to channel
+- Ensure the bot is invited to the channel
+- For private channels, the bot needs to be a member
+- Check that you have the correct channel ID
+
+#### Invalid token error
+- Verify the token starts with `xoxb-`
+- Ensure you copied the entire token
+- Check if the app is still installed in your workspace
+
+#### Permission errors
+- Verify all required scopes are added
+- Reinstall the app after adding new scopes
+- For public channels, ensure `chat:write.public` scope is added
 
 ## Development
 
@@ -165,22 +241,102 @@ pnpm run lint
 pnpm run format
 ```
 
-## Setting up Claude Code
+## Complete Setup Guide
 
-### Quick Start
+### Prerequisites
 
-1. Install ccth globally:
+- Node.js 18+ installed
+- A Slack workspace where you have permissions to create apps
+- Claude Code installed
+
+### Quick Setup (5 minutes)
+
+#### 1. Install CCTH
+
 ```bash
 npm install -g ccth
+# or
+pnpm add -g ccth
+# or
+yarn global add ccth
 ```
 
-2. Set environment variables:
+#### 2. Create Slack Bot
+
+Follow the [Slack Bot Setup](#slack-bot-setup) section above to:
+1. Create a new Slack app
+2. Add required bot token scopes (`chat:write`, `chat:write.public`)
+3. Install the app to your workspace
+4. Copy the bot token (starts with `xoxb-`)
+5. Get your channel ID
+6. Invite the bot to your channel
+
+#### 3. Configure Environment
+
 ```bash
-export SLACK_BOT_TOKEN="xoxb-your-slack-bot-token"
-export SLACK_CHANNEL="C1234567890"  # Your Slack channel ID
+# Option 1: Export in your shell profile (~/.bashrc, ~/.zshrc, etc.)
+export SLACK_BOT_TOKEN="xoxb-your-bot-token-here"
+export SLACK_CHANNEL="C1234567890"
+
+# Option 2: Create a .env file in your home directory
+cat > ~/.env << EOF
+SLACK_BOT_TOKEN="xoxb-your-bot-token-here"
+SLACK_CHANNEL="C1234567890"
+EOF
+
+# Load the environment variables
+source ~/.env
 ```
 
-3. Add to Claude Code settings (`~/.claude/settings.json`):
+#### 4. Configure Claude Code
+
+Create or edit `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ccth"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ccth"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### 5. Test Your Setup
+
+```bash
+# Test with a dry run
+echo '{"session_id": "test", "hook_event_name": "UserPromptSubmit", "prompt": "Test message"}' | ccth --dry-run --debug
+
+# If successful, test actual Slack posting
+echo '{"session_id": "test", "hook_event_name": "UserPromptSubmit", "prompt": "Hello from CCTH!"}' | ccth
+```
+
+You should see a message appear in your Slack channel!
+
+### Advanced Configuration
+
+#### Monitor All Events
+
+For comprehensive session monitoring, add all supported events:
+
 ```json
 {
   "hooks": {
@@ -213,10 +369,56 @@ export SLACK_CHANNEL="C1234567890"  # Your Slack channel ID
           }
         ]
       }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ccth"
+          }
+        ]
+      }
     ]
   }
 }
 ```
+
+#### Project-Specific Configuration
+
+Create `.claude/settings.json` in your project directory for project-specific hooks:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ccth --channel C0987654321"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### Multiple Workspaces
+
+Use different channels for different projects:
+
+```bash
+# Personal projects
+alias ccth-personal='ccth --channel C1111111111'
+
+# Work projects
+alias ccth-work='ccth --channel C2222222222'
+```
+
+Then update your Claude Code settings to use the aliases.
 
 See [examples/](examples/) directory for more configuration examples.
 
