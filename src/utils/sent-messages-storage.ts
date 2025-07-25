@@ -29,7 +29,11 @@ export class SentMessagesStorage {
     try {
       const content = await fs.readFile(this.filePath, "utf-8");
       const messages: SentMessage[] = JSON.parse(content);
-      return new Set(messages.map((m) => m.messageHash).filter((hash): hash is string => hash !== undefined));
+      return new Set(
+        messages
+          .map((m) => m.messageHash)
+          .filter((hash): hash is string => hash !== undefined),
+      );
     } catch (error) {
       // File doesn't exist yet, return empty set
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
