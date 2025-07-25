@@ -9,6 +9,7 @@ import {
 
 // Legacy imports for potential future use with transcript parsing
 import { SessionMessage } from "../schemas/session-message.schema.js";
+import type { AssistantSummary } from "../utils/transcript-reader.js";
 
 // Format tool input/output for display
 const formatToolData = (data: unknown, maxLength = 500): string => {
@@ -337,6 +338,96 @@ export async function formatMessageForSlack(
   } else if (message.type === "summary" && (message as any).summary) {
     fallbackText = String((message as any).summary).substring(0, 100) + "...";
   }
+
+  return {
+    text: fallbackText,
+    blocks,
+  };
+}
+
+// Format assistant message for Slack
+export function formatAssistantMessage(summary: AssistantSummary): {
+  text: string;
+  blocks: KnownBlock[];
+} {
+  const blocks: KnownBlock[] = [];
+  const time = new Date().toLocaleTimeString();
+
+  // Header with model info
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `🤖 *Assistant${summary.model ? ` (${summary.model})` : ""} at ${time}*`,
+    },
+  });
+
+  // Thinking content (if present and not empty)
+  if (summary.thinking && summary.thinking.trim()) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `💭 *Thinking...*\n${
+          summary.thinking.length > 1500
+            ? summary.thinking.substring(0, 1500) + "..."
+            : summary.thinking
+        }`,
+      },
+    });
+  }
+
+  // Text content
+  if (summary.text && summary.text.trim()) {
+    const truncatedText =
+      summary.text.length > 3000
+        ? summary.text.substring(0, 3000) + "..."
+        : summary.text;
+
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: truncatedText,
+      },
+    });
+  }
+
+  // Tool uses (if any)
+  if (summary.toolUses.length > 0) {
+    const toolList = summary.toolUses
+      .map((tool) => `• ${tool.name}`)
+      .join("\n");
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `🔧 *Tools Used:*\n${toolList}`,
+      },
+    });
+  }
+
+  // Token usage (if available)
+  if (summary.tokenUsage) {
+    blocks.push({
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `📊 Tokens: ${summary.tokenUsage.input} in / ${summary.tokenUsage.output} out`,
+        },
+      ],
+    });
+  }
+
+  blocks.push({
+    type: "divider",
+  });
+
+  // Create fallback text
+  const fallbackText = summary.text
+    ? summary.text.substring(0, 100) + (summary.text.length > 100 ? "..." : "")
+    : "Assistant message";
 
   return {
     text: fallbackText,

@@ -91,6 +91,7 @@ describe("Hook Processor - Debug Flag", () => {
       channel: "test-channel",
       dryRun: false,
       debug: true,
+      storageDir: "/test/storage",
     });
 
     cleanup();
@@ -163,6 +164,7 @@ describe("Hook Processor - Debug Flag", () => {
       channel: "test-channel",
       dryRun: true,
       debug: true,
+      storageDir: "/test/storage",
     });
 
     cleanup();

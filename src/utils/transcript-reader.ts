@@ -97,6 +97,14 @@ export class TranscriptReader {
   }
 
   /**
+   * Get all assistant messages from the transcript
+   */
+  async getAllAssistantMessages(): Promise<SessionMessage[]> {
+    const messages = await this.readMessages();
+    return messages.filter((msg) => msg && msg.type === "assistant");
+  }
+
+  /**
    * Get a summary of the latest assistant message including tool uses
    */
   async getLatestAssistantSummary(): Promise<AssistantSummary | null> {
@@ -155,6 +163,73 @@ export class TranscriptReader {
     }
 
     return summary;
+  }
+
+  /**
+   * Get summaries of all assistant messages including tool uses
+   */
+  async getAllAssistantSummaries(): Promise<AssistantSummary[]> {
+    const messages = await this.getAllAssistantMessages();
+    const summaries: AssistantSummary[] = [];
+
+    for (const message of messages) {
+      if (message.type !== "assistant") continue;
+
+      const content = message.message.content;
+      if (!Array.isArray(content)) continue;
+
+      const summary: AssistantSummary = {
+        text: "",
+        toolUses: [],
+      };
+
+      // Extract text, thinking, and tool uses
+      const textParts: string[] = [];
+      const thinkingParts: string[] = [];
+
+      for (const item of content) {
+        switch (item.type) {
+          case "text":
+            if (item.text) {
+              textParts.push(item.text);
+            }
+            break;
+          case "thinking":
+            if (item.thinking) {
+              thinkingParts.push(item.thinking);
+            }
+            break;
+          case "tool_use":
+            summary.toolUses.push({
+              name: item.name,
+              id: item.id,
+            });
+            break;
+        }
+      }
+
+      summary.text = textParts.join("\n");
+      if (thinkingParts.length > 0) {
+        summary.thinking = thinkingParts.join("\n");
+      }
+
+      // Add metadata if available
+      if ((message as any).metadata) {
+        summary.model = (message as any).metadata.model;
+      }
+
+      // Add token usage if available
+      if (message.message.usage) {
+        summary.tokenUsage = {
+          input: message.message.usage.input_tokens,
+          output: message.message.usage.output_tokens,
+        };
+      }
+
+      summaries.push(summary);
+    }
+
+    return summaries;
   }
 }
 

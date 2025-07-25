@@ -4,8 +4,8 @@ import { getOrCreateThread } from "./slack/thread-manager.js";
 import { formatHookEventForSlack } from "./slack/message-formatter.js";
 import { logger } from "./utils/logger.js";
 import { createTranscriptReader } from "./utils/transcript-reader.js";
-import { KnownBlock } from "@slack/types";
 import { createFileStorage } from "./utils/file-storage.js";
+import { sendUnsentAssistantMessages } from "./utils/assistant-message-handler.js";
 
 interface ProcessOptions {
   slackClient: WebClient | null;
@@ -27,63 +27,25 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
   } = options;
 
   return new Promise((resolve, reject) => {
-    let inputBuffer = "";
-
-    // Read from stdin
-    process.stdin.setEncoding("utf8");
+    let inputData = "";
 
     process.stdin.on("data", (chunk) => {
-      inputBuffer += chunk;
+      inputData += chunk.toString();
     });
 
     process.stdin.on("end", async () => {
       try {
-        logger.debug("Received input from stdin", {
-          length: inputBuffer.length,
-        });
-
-        // Save raw event to JSONL file (only in debug mode)
-        if (debug) {
-          try {
-            // Parse just to get session_id
-            const rawData = JSON.parse(inputBuffer);
-            if (
-              rawData &&
-              typeof rawData === "object" &&
-              "session_id" in rawData
-            ) {
-              const fileStorage = createFileStorage({ storageDir });
-              await fileStorage.appendEvent(
-                rawData.session_id as string,
-                rawData,
-              );
-              logger.debug("Saved raw event to storage", {
-                sessionId: rawData.session_id,
-                eventType: rawData.hook_event_name,
-              });
-            }
-          } catch (error) {
-            logger.warn("Failed to save raw event", {
-              error,
-              inputBuffer,
-            });
-          }
-        }
-
-        // Parse JSON input
-        let jsonData: unknown;
+        let hookEvent;
         try {
-          jsonData = JSON.parse(inputBuffer);
+          const jsonData = JSON.parse(inputData);
+          hookEvent = parseHookEvent(jsonData);
+          if (!hookEvent) {
+            throw new Error("Failed to parse hook event");
+          }
         } catch (error) {
-          throw new Error(
-            `Failed to parse JSON input: ${error instanceof Error ? error.message : "Unknown error"}`,
-          );
-        }
-
-        // Parse as HookEvent
-        const hookEvent = parseHookEvent(jsonData);
-        if (!hookEvent) {
-          throw new Error("Invalid hook event format");
+          logger.error("Failed to parse hook event", error);
+          reject(error);
+          return;
         }
 
         logger.info("Parsed hook event", {
@@ -91,38 +53,66 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
           sessionId: hookEvent.session_id,
         });
 
-        // Format message for Slack
+        // Save raw event to storage in debug mode
+        if (debug && storageDir) {
+          try {
+            const storage = createFileStorage({ storageDir });
+            await storage.appendEvent(hookEvent.session_id, hookEvent);
+            logger.debug("Saved raw event to storage", {
+              sessionId: hookEvent.session_id,
+              eventType: hookEvent.hook_event_name,
+            });
+          } catch (error) {
+            logger.warn("Failed to save raw event", error);
+          }
+        }
+
+        const eventType = hookEvent.hook_event_name;
+
+        // For PreToolUse events, don't show progress in transcript
+        if (eventType === "PreToolUse") {
+          resolve();
+          return;
+        }
+
+        // Format the event for Slack
         const slackMessage = await formatHookEventForSlack(hookEvent);
+
+        // Check for interactive mode
+        const isInteractive = process.stdin.isTTY;
+        if (isInteractive && !dryRun) {
+          logger.debug(
+            "Interactive mode detected - console output will be shown in transcript mode",
+          );
+        }
 
         if (dryRun) {
           logger.info("Dry run mode - would send to Slack:", slackMessage);
 
-          // For Stop events, also show assistant response in dry-run
-          if (
-            hookEvent.hook_event_name === "Stop" &&
-            hookEvent.transcript_path
-          ) {
+          // Show all assistant messages in dry-run
+          if (hookEvent.transcript_path) {
             try {
               const reader = createTranscriptReader(hookEvent.transcript_path);
-              const assistantSummary = await reader.getLatestAssistantSummary();
-              if (assistantSummary && assistantSummary.text) {
-                logger.info(
-                  "Dry run mode - would also send assistant response:",
-                  {
-                    text: assistantSummary.text.substring(0, 200) + "...",
-                    thinking: assistantSummary.thinking
-                      ? assistantSummary.thinking.substring(0, 100) + "..."
-                      : "none",
-                    toolUses: assistantSummary.toolUses.length,
-                    model: assistantSummary.model,
-                  },
-                );
+              const allSummaries = await reader.getAllAssistantSummaries();
 
-                // Log the actual formatted message
-                const formattedMessage =
-                  formatAssistantResponseForSlack(assistantSummary);
-                logger.debug("Formatted assistant message:", formattedMessage);
-              }
+              logger.info(
+                `Dry run mode - would send ${allSummaries.length} assistant message(s)`,
+              );
+
+              allSummaries.forEach((summary, index) => {
+                if (summary.text) {
+                  logger.info(`Assistant message ${index + 1}:`, {
+                    text:
+                      summary.text.substring(0, 200) +
+                      (summary.text.length > 200 ? "..." : ""),
+                    thinking: summary.thinking
+                      ? summary.thinking.substring(0, 100) + "..."
+                      : "none",
+                    toolUses: summary.toolUses.length,
+                    model: summary.model,
+                  });
+                }
+              });
             } catch (error) {
               logger.warn("Failed to read transcript", error);
             }
@@ -147,11 +137,12 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
             {
               client: slackClient,
               channel,
-              timeoutSeconds: threadTimeoutSeconds,
+              timeoutSeconds: threadTimeoutSeconds || 3600,
               storageDir,
             },
           );
 
+          // Send the hook event message to Slack
           const result = await slackClient.chat.postMessage({
             channel,
             thread_ts: threadTs,
@@ -164,33 +155,19 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
             channel: result.channel,
           });
 
-          // For Stop events, also send the assistant response
-          if (
-            hookEvent.hook_event_name === "Stop" &&
-            hookEvent.transcript_path
-          ) {
+          // Send any unsent assistant messages from the transcript
+          if (hookEvent.transcript_path && threadTs && storageDir) {
             try {
-              const reader = createTranscriptReader(hookEvent.transcript_path);
-              const assistantSummary = await reader.getLatestAssistantSummary();
-
-              if (assistantSummary && assistantSummary.text) {
-                // Format assistant response for Slack
-                const assistantMessage =
-                  formatAssistantResponseForSlack(assistantSummary);
-
-                // Send assistant response to Slack
-                const assistantResult = await slackClient.chat.postMessage({
-                  channel,
-                  thread_ts: threadTs,
-                  ...assistantMessage,
-                });
-
-                logger.info("Assistant response sent to Slack", {
-                  ts: assistantResult.ts,
-                });
-              }
+              await sendUnsentAssistantMessages({
+                client: slackClient,
+                channel,
+                threadTs,
+                sessionId: hookEvent.session_id,
+                transcriptPath: hookEvent.transcript_path,
+                storageDir,
+              });
             } catch (error) {
-              logger.error("Failed to read/send assistant response", error);
+              logger.error("Failed to send assistant messages", error);
             }
           }
         }
@@ -207,93 +184,4 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
       reject(error);
     });
   });
-}
-
-// Format assistant response from transcript
-function formatAssistantResponseForSlack(summary: {
-  text: string;
-  thinking?: string;
-  toolUses: Array<{
-    name: string;
-    id: string;
-  }>;
-  tokenUsage?: {
-    input: number;
-    output: number;
-  };
-  model?: string;
-}): { text: string; blocks: KnownBlock[] } {
-  const blocks: KnownBlock[] = [];
-  const time = new Date().toLocaleTimeString();
-
-  // Header with model info
-  blocks.push({
-    type: "section",
-    text: {
-      type: "mrkdwn",
-      text: `🤖 *Assistant Response${summary.model ? ` (${summary.model})` : ""} at ${time}*`,
-    },
-  });
-
-  // Thinking content (if present)
-  if (summary.thinking) {
-    blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `✻ *Thinking...*\n${summary.thinking.length > 1500 ? summary.thinking.substring(0, 1500) + "..." : summary.thinking}`,
-      },
-    });
-  }
-
-  // Text content
-  if (summary.text) {
-    const truncatedText =
-      summary.text.length > 3000
-        ? summary.text.substring(0, 3000) + "..."
-        : summary.text;
-
-    blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: truncatedText,
-      },
-    });
-  }
-
-  // Tool uses
-  if (summary.toolUses.length > 0) {
-    blocks.push({
-      type: "context",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: `🔧 Used tools: ${summary.toolUses.map((t) => t.name).join(", ")}`,
-        },
-      ],
-    });
-  }
-
-  // Token usage if present
-  if (summary.tokenUsage) {
-    blocks.push({
-      type: "context",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: `📊 Tokens: ${summary.tokenUsage.input.toLocaleString()} in / ${summary.tokenUsage.output.toLocaleString()} out`,
-        },
-      ],
-    });
-  }
-
-  blocks.push({
-    type: "divider",
-  });
-
-  return {
-    text: `Assistant: ${summary.text.substring(0, 100)}...`,
-    blocks,
-  };
 }
