@@ -24,7 +24,6 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
     dryRun,
     threadTimeoutSeconds,
     storageDir,
-    debug,
     trace,
   } = options;
 
