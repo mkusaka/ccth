@@ -10,7 +10,7 @@ import { logger } from "./utils/logger.js";
 import { createFileStorage } from "./utils/file-storage.js";
 
 // Load environment variables
-config();
+config({ quiet: true });
 
 const program = new Command();
 
