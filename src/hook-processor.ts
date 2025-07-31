@@ -14,6 +14,7 @@ interface ProcessOptions {
   threadTimeoutSeconds?: number;
   storageDir?: string;
   debug: boolean;
+  trace?: boolean;
 }
 
 export async function processHookInput(options: ProcessOptions): Promise<void> {
@@ -23,7 +24,7 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
     dryRun,
     threadTimeoutSeconds,
     storageDir,
-    debug,
+    trace,
   } = options;
 
   return new Promise((resolve, reject) => {
@@ -53,8 +54,8 @@ export async function processHookInput(options: ProcessOptions): Promise<void> {
           sessionId: hookEvent.session_id,
         });
 
-        // Save raw event to storage in debug mode
-        if (debug && storageDir) {
+        // Save raw event to storage in trace mode
+        if (trace && storageDir) {
           try {
             const storage = createFileStorage({ storageDir });
             await storage.appendEvent(hookEvent.session_id, hookEvent);

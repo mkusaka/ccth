@@ -270,4 +270,5 @@ export const createFileStorage = (config: FileStorageConfig = {}) => ({
   cleanupOldSessions: (maxAgeMs: number) =>
     cleanupOldSessions(maxAgeMs, config),
   migrateOldFormat: () => migrateOldFormat(config),
+  getStorageDir: () => config.storageDir || DEFAULT_STORAGE_DIR,
 });

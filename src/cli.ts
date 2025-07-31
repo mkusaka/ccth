@@ -26,6 +26,7 @@ program
   .option("-t, --token <token>", "Slack bot token", process.env.SLACK_BOT_TOKEN)
   .option("-d, --debug", "Enable debug logging", false)
   .option("--dry-run", "Process messages without sending to Slack", false)
+  .option("--trace", "Save raw hook event data to file", false)
   .option(
     "--thread-timeout <seconds>",
     "Thread inactivity timeout in seconds",
@@ -80,6 +81,8 @@ program
           dryRun: options.dryRun,
           threadTimeoutSeconds,
           debug: options.debug,
+          trace: options.trace,
+          storageDir: createFileStorage().getStorageDir(),
         });
 
         logger.debug("Hook processing completed successfully");

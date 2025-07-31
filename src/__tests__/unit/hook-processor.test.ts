@@ -31,7 +31,7 @@ vi.mock("../../utils/logger.js", () => ({
   },
 }));
 
-describe("Hook Processor - Debug Flag", () => {
+describe("Hook Processor - Trace Flag", () => {
   let mockFileStorage: any;
   const mockSlackClient = {
     chat: {
@@ -75,7 +75,7 @@ describe("Hook Processor - Debug Flag", () => {
     };
   };
 
-  it("should save raw events when debug is true", async () => {
+  it("should save raw events when trace is true", async () => {
     const hookEvent = {
       hook_event_name: "UserPromptSubmit",
       session_id: "test-session",
@@ -90,7 +90,8 @@ describe("Hook Processor - Debug Flag", () => {
       slackClient: mockSlackClient,
       channel: "test-channel",
       dryRun: false,
-      debug: true,
+      debug: false,
+      trace: true,
       storageDir: "/test/storage",
     });
 
@@ -102,7 +103,7 @@ describe("Hook Processor - Debug Flag", () => {
     );
   });
 
-  it("should not save raw events when debug is false", async () => {
+  it("should not save raw events when trace is false", async () => {
     const hookEvent = {
       hook_event_name: "UserPromptSubmit",
       session_id: "test-session",
@@ -125,7 +126,7 @@ describe("Hook Processor - Debug Flag", () => {
     expect(mockFileStorage.appendEvent).not.toHaveBeenCalled();
   });
 
-  it("should not save raw events in dry-run mode when debug is false", async () => {
+  it("should not save raw events in dry-run mode when trace is false", async () => {
     const hookEvent = {
       hook_event_name: "UserPromptSubmit",
       session_id: "test-session",
@@ -148,7 +149,7 @@ describe("Hook Processor - Debug Flag", () => {
     expect(mockFileStorage.appendEvent).not.toHaveBeenCalled();
   });
 
-  it("should save raw events in dry-run mode when debug is true", async () => {
+  it("should save raw events in dry-run mode when trace is true", async () => {
     const hookEvent = {
       hook_event_name: "UserPromptSubmit",
       session_id: "test-session",
@@ -163,7 +164,8 @@ describe("Hook Processor - Debug Flag", () => {
       slackClient: null,
       channel: "test-channel",
       dryRun: true,
-      debug: true,
+      debug: false,
+      trace: true,
       storageDir: "/test/storage",
     });
 
