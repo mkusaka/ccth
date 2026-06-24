@@ -135,7 +135,12 @@ jobs:
     timeout-minutes: 20
     permissions:
       actions: read
+      checks: write
       contents: read
+      pull-requests: write
+    env:
+      # renovate: datasource=github-releases depName=reviewdog/reviewdog
+      REVIEWDOG_VERSION: v0.21.0
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -156,8 +161,14 @@ jobs:
           upload: never
           upload-database: false
 
-      - name: Check CodeQL findings
+      - name: Set up reviewdog
+        uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f # v1.5.0
+        with:
+          reviewdog_version: ${{ env.REVIEWDOG_VERSION }}
+      - name: Report CodeQL findings
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
           SARIF_DIR: ${{ steps.analyze.outputs.sarif-output }}
         run: |
           set -euo pipefail
@@ -168,5 +179,17 @@ jobs:
             exit 1
           fi
 
-          node .github/scripts/check-codeql-sarif.mjs "$sarif_file"
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            reporter="github-pr-review"
+          else
+            reporter="github-check"
+          fi
+
+          reviewdog \
+            -f=sarif \
+            -name=codeql-actions \
+            "-reporter=$reporter" \
+            -filter-mode=added \
+            -fail-level=error \
+            < "$sarif_file"
         shell: bash
