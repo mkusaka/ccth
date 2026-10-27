@@ -16,6 +16,10 @@ on:
       - synchronize
   workflow_dispatch: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions: {}
 
 env:
@@ -23,7 +27,7 @@ env:
   ZIZMOR_VERSION: v1.25.2
 
 jobs:
-  actionlint:
+  jactionlint:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -32,26 +36,22 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
-
-      - name: Download actionlint
+      - name: Download jactionlint
         env:
-          # renovate: datasource=github-releases depName=rhysd/actionlint
-          ACTIONLINT_VERSION: v1.7.12
+          # renovate: datasource=github-releases depName=jdx/jactionlint
+          JACTIONLINT_VERSION: v2.3.0
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-
-          archive="actionlint_${ACTIONLINT_VERSION#v}_linux_amd64.tar.gz"
-          curl -sSfL -H "Authorization: token $GITHUB_TOKEN" -o "/tmp/$archive" "https://github.com/rhysd/actionlint/releases/download/$ACTIONLINT_VERSION/$archive"
-          curl -sSfL -H "Authorization: token $GITHUB_TOKEN" -o /tmp/actionlint_checksums.txt "https://github.com/rhysd/actionlint/releases/download/$ACTIONLINT_VERSION/actionlint_${ACTIONLINT_VERSION#v}_checksums.txt"
-          (cd /tmp && grep "  $archive\$" actionlint_checksums.txt | sha256sum -c -)
-          tar -xzf "/tmp/$archive" -C /tmp
-          sudo install -m 0755 /tmp/actionlint /usr/local/bin/actionlint
-          actionlint -version
+          archive="jactionlint_${JACTIONLINT_VERSION#v}_linux_amd64.tar.gz"
+          curl -sSfL -H "Authorization: token $GITHUB_TOKEN" -o "/tmp/$archive" "https://github.com/jdx/jactionlint/releases/download/$JACTIONLINT_VERSION/$archive"
+          curl -sSfL -H "Authorization: token $GITHUB_TOKEN" -o /tmp/jactionlint_checksums.txt "https://github.com/jdx/jactionlint/releases/download/$JACTIONLINT_VERSION/jactionlint_${JACTIONLINT_VERSION#v}_checksums.txt"
+          (cd /tmp && grep "  $archive\$" jactionlint_checksums.txt | sha256sum -c -)
+          tar -xzf "/tmp/$archive" -C /tmp jactionlint
+          sudo install -m 0755 /tmp/jactionlint /usr/local/bin/jactionlint
+          jactionlint --version
         shell: bash
-
       - name: Check workflow files
-        run: actionlint -color
+        run: jactionlint --color
         shell: bash
 
   ghalint:
